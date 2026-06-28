@@ -405,19 +405,21 @@
         <label>Cidade <input data-testid="contact-city" bind:value={wizard.address.city} /></label>
         <label>
           Estado
-            <Select.Root type="single" bind:value={wizard.address.state} items={stateItems}>
+          <Select.Root type="single" bind:value={wizard.address.state} items={stateItems}>
             <Select.Trigger data-testid="contact-state" class="select-trigger">
               <Select.Value placeholder="Selecione o estado" />
             </Select.Trigger>
-            <Select.Content class="select-content">
-              <Select.Viewport class="select-viewport">
-                {#each states as state}
-                  <Select.Item value={state} label={state} class="select-item">
-                    {state}
-                  </Select.Item>
-                {/each}
-              </Select.Viewport>
-            </Select.Content>
+            <Select.Portal>
+              <Select.Content class="select-content" sideOffset={8}>
+                <Select.Viewport class="select-viewport">
+                  {#each states as state}
+                    <Select.Item value={state} label={state} class="select-item">
+                      {state}
+                    </Select.Item>
+                  {/each}
+                </Select.Viewport>
+              </Select.Content>
+            </Select.Portal>
           </Select.Root>
         </label>
         </div>
@@ -519,15 +521,17 @@
             <Select.Trigger data-testid="edit-contact-state" class="select-trigger">
               <Select.Value placeholder="Selecione o estado" />
             </Select.Trigger>
-            <Select.Content class="select-content">
-              <Select.Viewport class="select-viewport">
-                {#each states as state}
-                  <Select.Item value={state} label={state} class="select-item">
-                    {state}
-                  </Select.Item>
-                {/each}
-              </Select.Viewport>
-            </Select.Content>
+            <Select.Portal>
+              <Select.Content class="select-content" sideOffset={8}>
+                <Select.Viewport class="select-viewport">
+                  {#each states as state}
+                    <Select.Item value={state} label={state} class="select-item">
+                      {state}
+                    </Select.Item>
+                  {/each}
+                </Select.Viewport>
+              </Select.Content>
+            </Select.Portal>
           </Select.Root>
         </label>
         <p class="error" data-testid="edit-address-error">{editAddressError}</p>
@@ -623,6 +627,60 @@
     border-radius: 6px;
     padding: 10px 12px;
     background: white;
+  }
+
+  :global(.select-trigger) {
+    min-height: 42px;
+    width: 100%;
+    display: inline-flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    padding: 10px 12px;
+    border: 1px solid #9ca3af;
+    border-radius: 6px;
+    background: #fff;
+    color: #111827;
+    cursor: pointer;
+  }
+
+  :global(.select-content) {
+    z-index: 40;
+    width: var(--bits-select-anchor-width);
+    min-width: var(--bits-select-anchor-width);
+    max-height: min(280px, var(--bits-select-content-available-height));
+    overflow: hidden;
+    border: 1px solid #d1d5db;
+    border-radius: 8px;
+    background: #fff;
+    box-shadow: 0 10px 24px rgba(15, 23, 42, 0.12);
+  }
+
+  :global(.select-viewport) {
+    padding: 6px;
+    display: grid;
+    gap: 4px;
+    max-height: min(280px, var(--bits-select-content-available-height));
+    overflow: auto;
+  }
+
+  :global(.select-item) {
+    display: flex;
+    align-items: center;
+    min-height: 38px;
+    padding: 8px 10px;
+    border-radius: 6px;
+    background: transparent;
+    color: #111827;
+    cursor: pointer;
+  }
+
+  :global(.select-item[data-highlighted]) {
+    background: #e5e7eb;
+  }
+
+  :global(.select-item[data-selected]) {
+    background: #dbeafe;
   }
 
   button {
