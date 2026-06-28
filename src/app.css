@@ -1,24 +1,74 @@
 :root {
-  color: #1f2937;
-  background: #f3f4f6;
-  font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  color: #c7ffff;
+  background: #020b0d;
+  font-family:
+    Rajdhani, Orbitron, Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont,
+    'Segoe UI', sans-serif;
   line-height: 1.5;
   font-weight: 400;
   font-synthesis: none;
   text-rendering: optimizeLegibility;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
+  --bg-void: #020b0d;
+  --bg-deep: #001c20;
+  --panel: rgba(0, 35, 39, 0.72);
+  --panel-strong: rgba(0, 55, 60, 0.82);
+  --cyan: #00f5ff;
+  --cyan-soft: #65fbff;
+  --cyan-dim: rgba(0, 245, 255, 0.22);
+  --lime: #eefb4a;
+  --lime-dim: rgba(238, 251, 74, 0.22);
+  --text: #c7ffff;
+  --muted: #78aeb2;
+  --danger: #ff667d;
 }
 
 html,
-body {
+body,
+#app {
   margin: 0;
   min-width: 320px;
   min-height: 100%;
 }
 
 body {
-  background: #f3f4f6;
+  min-height: 100vh;
+  overflow-x: hidden;
+  background:
+    radial-gradient(circle at 12% 26%, rgba(0, 245, 255, 0.11), transparent 18rem),
+    radial-gradient(circle at 78% 12%, rgba(0, 118, 122, 0.28), transparent 26rem),
+    radial-gradient(circle at 62% 68%, rgba(0, 245, 255, 0.08), transparent 22rem),
+    linear-gradient(125deg, rgba(0, 18, 19, 0.98), rgba(0, 9, 11, 0.98) 48%, rgba(0, 31, 34, 0.94));
+  color: var(--text);
+}
+
+body::before,
+body::after {
+  content: '';
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: -2;
+}
+
+body::before {
+  background-image:
+    radial-gradient(circle, rgba(101, 251, 255, 0.45) 0 1px, transparent 1.6px),
+    radial-gradient(circle, rgba(238, 251, 74, 0.18) 0 1px, transparent 1.5px);
+  background-size: 34px 34px, 89px 89px;
+  background-position: 8px 10px, 22px 28px;
+  opacity: 0.26;
+  mask-image: radial-gradient(circle at center, black 0 68%, transparent 100%);
+}
+
+body::after {
+  z-index: -1;
+  background:
+    linear-gradient(transparent 95%, rgba(0, 245, 255, 0.07) 96%),
+    linear-gradient(90deg, transparent 95%, rgba(0, 245, 255, 0.07) 96%);
+  background-size: 48px 48px;
+  opacity: 0.2;
 }
 
 button,
@@ -28,4 +78,9 @@ input {
 
 a {
   color: inherit;
+}
+
+::selection {
+  background: rgba(0, 245, 255, 0.28);
+  color: #ffffff;
 }
