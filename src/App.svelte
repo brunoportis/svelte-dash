@@ -6,10 +6,10 @@
   import {
     clearDemoData,
     clearSession,
+    consumeFlash,
     getContactById,
     nextContactId,
     readContacts,
-    readFlash,
     readSession,
     setFlash,
     upsertContact,
@@ -39,6 +39,7 @@
   let sessionEmail = '';
   let contacts: DemoContact[] = [];
   let flashMessage = '';
+  let flashTimer: ReturnType<typeof setTimeout> | undefined;
   let wizardStep: Step = 'basic';
   let wizard = emptyWizardState();
   let editAddress = {
@@ -137,7 +138,8 @@
     loggedIn = Boolean(session);
     sessionEmail = session?.email ?? '';
     contacts = readContacts();
-    flashMessage = readFlash();
+    const pendingFlash = consumeFlash();
+    if (pendingFlash) showFlash(pendingFlash);
     currentContact = route.name === 'contact-detail' || route.name === 'contact-edit-address'
       ? getContactById(route.id)
       : undefined;
@@ -152,6 +154,21 @@
       wizardStep = 'basic';
       wizardError = '';
     }
+  }
+
+  function showFlash(message: string) {
+    flashMessage = message;
+    if (flashTimer) clearTimeout(flashTimer);
+    flashTimer = setTimeout(() => {
+      flashMessage = '';
+      flashTimer = undefined;
+    }, 4200);
+  }
+
+  function dismissFlash() {
+    flashMessage = '';
+    if (flashTimer) clearTimeout(flashTimer);
+    flashTimer = undefined;
   }
 
   function navigate(path: string) {
@@ -332,6 +349,7 @@
 
   onDestroy(() => {
     window.removeEventListener('hashchange', handleHashChange);
+    if (flashTimer) clearTimeout(flashTimer);
   });
 
   $: if (initialized && route.name === 'unknown') {
@@ -402,7 +420,12 @@
   </div>
 
   {#if flashMessage}
-    <div class="flash" data-testid="flash-message" role="status">{flashMessage}</div>
+    <div class="flash" data-testid="flash-message" role="status">
+      <span class="flash-signal" aria-hidden="true"><i></i></span>
+      <span class="flash-copy"><small>System notification</small>{flashMessage}</span>
+      <button class="flash-close" type="button" aria-label="Fechar notificação" on:click={dismissFlash}>×</button>
+      <i class="flash-progress" aria-hidden="true"></i>
+    </div>
   {/if}
 
   {#if route.name === 'login'}
@@ -1454,12 +1477,191 @@
     text-transform: uppercase;
   }
 
-  input {
-    min-height: 22px;
-    background: linear-gradient(90deg, rgba(3, 14, 17, 0.94), rgba(7, 25, 28, 0.84));
+  input,
+  :global(.select-trigger) {
+    --field-corner: rgba(111, 255, 237, 0.42);
+    background:
+      linear-gradient(to bottom left, transparent 42%, var(--field-corner) 46% 54%, transparent 58%) top right / 10px 10px no-repeat,
+      linear-gradient(to bottom left, transparent 42%, var(--field-corner) 46% 54%, transparent 58%) bottom left / 10px 10px no-repeat,
+      linear-gradient(90deg, rgba(3, 14, 17, 0.94), rgba(7, 25, 28, 0.84));
   }
 
-  input:hover { border-color: rgba(100, 242, 223, 0.38); }
+  input { min-height: 22px; }
+
+  input:hover,
+  :global(.select-trigger:hover) {
+    --field-corner: rgba(100, 242, 223, 0.7);
+    border-color: rgba(100, 242, 223, 0.38);
+  }
+
+  input:focus,
+  :global(.select-trigger:focus-visible),
+  :global(.select-trigger[data-state='open']) {
+    --field-corner: var(--cyan);
+  }
+
+  button {
+    --button-corner: rgba(8, 82, 78, 0.9);
+    background:
+      linear-gradient(to bottom left, transparent 42%, var(--button-corner) 46% 54%, transparent 58%) top right / 12px 12px no-repeat,
+      linear-gradient(to bottom left, transparent 42%, var(--button-corner) 46% 54%, transparent 58%) bottom left / 12px 12px no-repeat,
+      linear-gradient(135deg, rgba(217, 255, 87, 0.96), rgba(165, 255, 130, 0.92));
+  }
+
+  button.button-ghost {
+    --button-corner: rgba(111, 255, 237, 0.48);
+    background:
+      linear-gradient(to bottom left, transparent 42%, var(--button-corner) 46% 54%, transparent 58%) top right / 12px 12px no-repeat,
+      linear-gradient(to bottom left, transparent 42%, var(--button-corner) 46% 54%, transparent 58%) bottom left / 12px 12px no-repeat,
+      linear-gradient(rgba(8, 24, 28, 0.8), rgba(8, 24, 28, 0.8));
+  }
+
+  button:hover,
+  button:focus-visible {
+    --button-corner: var(--cyan);
+  }
+
+  .status-pill {
+    --status-corner: rgba(111, 255, 237, 0.42);
+    background:
+      linear-gradient(to bottom left, transparent 42%, var(--status-corner) 46% 54%, transparent 58%) top right / 10px 10px no-repeat,
+      linear-gradient(to bottom left, transparent 42%, var(--status-corner) 46% 54%, transparent 58%) bottom left / 10px 10px no-repeat,
+      linear-gradient(rgba(8, 26, 30, 0.76), rgba(8, 26, 30, 0.76));
+  }
+
+  .status-pill.accent {
+    --status-corner: rgba(100, 242, 223, 0.76);
+    background:
+      linear-gradient(to bottom left, transparent 42%, var(--status-corner) 46% 54%, transparent 58%) top right / 10px 10px no-repeat,
+      linear-gradient(to bottom left, transparent 42%, var(--status-corner) 46% 54%, transparent 58%) bottom left / 10px 10px no-repeat,
+      linear-gradient(rgba(100, 242, 223, 0.06), rgba(100, 242, 223, 0.06));
+  }
+
+  .step-strip span {
+    --step-corner: rgba(111, 255, 237, 0.38);
+    background:
+      linear-gradient(to bottom left, transparent 42%, var(--step-corner) 46% 54%, transparent 58%) top right / 8px 8px no-repeat,
+      linear-gradient(to bottom left, transparent 42%, var(--step-corner) 46% 54%, transparent 58%) bottom left / 8px 8px no-repeat,
+      linear-gradient(rgba(8, 24, 28, 0.62), rgba(8, 24, 28, 0.62));
+  }
+
+  .step-strip span.active-step {
+    --step-corner: rgba(5, 72, 69, 0.92);
+    background:
+      linear-gradient(to bottom left, transparent 42%, var(--step-corner) 46% 54%, transparent 58%) top right / 8px 8px no-repeat,
+      linear-gradient(to bottom left, transparent 42%, var(--step-corner) 46% 54%, transparent 58%) bottom left / 8px 8px no-repeat,
+      linear-gradient(135deg, rgba(100, 242, 223, 0.96), rgba(217, 255, 87, 0.9));
+  }
+
+  [data-testid='contact-wizard-page'] .panel {
+    background:
+      linear-gradient(to bottom left, transparent 43%, rgba(100, 242, 223, 0.62) 47% 53%, transparent 57%) top right / 18px 18px no-repeat,
+      linear-gradient(to bottom left, transparent 43%, rgba(100, 242, 223, 0.62) 47% 53%, transparent 57%) bottom left / 18px 18px no-repeat,
+      radial-gradient(ellipse at 74% 0%, rgba(25, 120, 113, 0.1), transparent 34%),
+      linear-gradient(135deg, rgba(7, 24, 28, 0.92), rgba(3, 13, 16, 0.84));
+  }
+
+  .flash {
+    position: fixed;
+    top: 24px;
+    right: clamp(18px, 3vw, 56px);
+    z-index: 50;
+    width: min(390px, calc(100vw - 36px));
+    margin: 0;
+    box-sizing: border-box;
+    display: grid;
+    grid-template-columns: auto 1fr auto;
+    align-items: center;
+    gap: 13px;
+    padding: 15px 16px;
+    overflow: hidden;
+    border-color: rgba(156, 255, 186, 0.34);
+    background:
+      linear-gradient(to bottom left, transparent 42%, rgba(156, 255, 186, 0.82) 46% 54%, transparent 58%) top right / 12px 12px no-repeat,
+      linear-gradient(to bottom left, transparent 42%, rgba(100, 242, 223, 0.7) 46% 54%, transparent 58%) bottom left / 12px 12px no-repeat,
+      linear-gradient(115deg, rgba(7, 35, 28, 0.97), rgba(4, 20, 22, 0.97));
+    backdrop-filter: blur(18px);
+    animation: toast-in 260ms ease-out both;
+  }
+
+  .flash-signal {
+    width: 28px;
+    height: 28px;
+    display: grid;
+    place-items: center;
+    border: 1px solid rgba(156, 255, 186, 0.42);
+    border-radius: 50%;
+    box-shadow: inset 0 0 12px rgba(156, 255, 186, 0.1);
+  }
+
+  .flash-signal i {
+    width: 7px;
+    height: 7px;
+    border-radius: 50%;
+    background: var(--success);
+    box-shadow: 0 0 10px var(--success);
+  }
+
+  .flash-copy {
+    display: grid;
+    gap: 2px;
+    color: var(--text-0);
+    font-size: 0.86rem;
+  }
+
+  .flash-copy small {
+    color: var(--success);
+    font-family: 'Rajdhani', sans-serif;
+    font-size: 0.66rem;
+    letter-spacing: 0.18em;
+    text-transform: uppercase;
+  }
+
+  button.flash-close {
+    --button-corner: transparent;
+    width: 28px;
+    height: 28px;
+    padding: 0;
+    display: grid;
+    place-items: center;
+    color: var(--text-2);
+    border: 0;
+    background: transparent;
+    clip-path: none;
+    font-family: inherit;
+    font-size: 1.2rem;
+    font-weight: 400;
+    line-height: 1;
+  }
+
+  button.flash-close:hover {
+    color: var(--text-0);
+    background: rgba(100, 242, 223, 0.08);
+    box-shadow: none;
+    transform: none;
+  }
+
+  .flash-progress {
+    position: absolute;
+    right: 0;
+    bottom: 0;
+    left: 0;
+    height: 2px;
+    transform-origin: left;
+    background: linear-gradient(90deg, var(--success), var(--cyan));
+    box-shadow: 0 0 8px rgba(156, 255, 186, 0.42);
+    animation: toast-progress 4.2s linear both;
+  }
+
+  @keyframes toast-in {
+    from { opacity: 0; transform: translateY(-10px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+
+  @keyframes toast-progress {
+    from { transform: scaleX(1); }
+    to { transform: scaleX(0); }
+  }
   button { font-weight: 600; }
   button:focus-visible, a:focus-visible, input:focus-visible, :global(.select-trigger:focus-visible) { outline: 1px solid var(--lime); outline-offset: 3px; }
   .button-ghost:hover { color: var(--cyan); border-color: rgba(100, 242, 223, 0.54); box-shadow: 0 0 24px rgba(100, 242, 223, 0.1); }
