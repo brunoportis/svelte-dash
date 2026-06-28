@@ -705,7 +705,7 @@
   {:else if route.name === 'contact-detail'}
     <main class="shell" data-testid="contact-detail-page">
       {#if currentContact}
-        <section class="panel narrow">
+        <section class="panel narrow record-panel">
           <span class="panel-index">RECORD // 001</span>
           <div class="panel-rule"></div>
           <div class="panel-header">
@@ -715,16 +715,38 @@
             </div>
             <p class="muted">Logado como: {sessionEmail}</p>
           </div>
-          <div class="detail-grid">
-            <p data-testid="contact-detail-status"><strong>Status:</strong> {currentContact.status}</p>
-            <p data-testid="contact-detail-name"><strong>Nome:</strong> {currentContact.name}</p>
-            <p data-testid="contact-detail-document"><strong>Documento:</strong> {currentContact.document}</p>
-            <p data-testid="contact-detail-address">
-              <strong>Endereço:</strong> {currentContact.address.street}, {currentContact.address.number} - {currentContact.address.city}/{currentContact.address.state} - {currentContact.address.cep}
-            </p>
-            <p data-testid="contact-detail-owner">
-              <strong>Responsável:</strong> {currentContact.owner.name} ({currentContact.owner.email})
-            </p>
+          <div class="record-frame">
+            <div class="record-banner">
+              <span class="record-badge"><i></i>Registro estabilizado</span>
+              <span class="record-id">ID // {String(currentContact.id).padStart(4, '0')}</span>
+            </div>
+
+            <div class="detail-grid">
+              <div class="detail-cell detail-cell-highlight">
+                <span class="detail-label">Status operacional</span>
+                <p data-testid="contact-detail-status"><strong>{currentContact.status}</strong></p>
+              </div>
+              <div class="detail-cell">
+                <span class="detail-label">Nome</span>
+                <p data-testid="contact-detail-name"><strong>{currentContact.name}</strong></p>
+              </div>
+              <div class="detail-cell">
+                <span class="detail-label">Documento</span>
+                <p data-testid="contact-detail-document"><strong>{currentContact.document}</strong></p>
+              </div>
+              <div class="detail-cell detail-cell-wide">
+                <span class="detail-label">Endereço</span>
+                <p data-testid="contact-detail-address">
+                  <strong>{currentContact.address.street}, {currentContact.address.number}</strong> - {currentContact.address.city}/{currentContact.address.state} - {currentContact.address.cep}
+                </p>
+              </div>
+              <div class="detail-cell detail-cell-wide">
+                <span class="detail-label">Responsável</span>
+                <p data-testid="contact-detail-owner">
+                  <strong>{currentContact.owner.name}</strong> ({currentContact.owner.email})
+                </p>
+              </div>
+            </div>
           </div>
           <div class="actions">
             <button data-testid="edit-address" type="button" on:click={() => navigate(`/contacts/${currentContact.id}/edit-address`)}>
@@ -1293,6 +1315,157 @@
   .detail-grid {
     display: grid;
     gap: 8px;
+  }
+
+  .record-panel {
+    --panel-corner: rgba(156, 255, 186, 0.68);
+    background:
+      linear-gradient(to bottom left, transparent 43%, var(--panel-corner) 47% 53%, transparent 57%) top right / 18px 18px no-repeat,
+      linear-gradient(to bottom left, transparent 43%, var(--panel-corner) 47% 53%, transparent 57%) bottom left / 18px 18px no-repeat,
+      radial-gradient(circle at 82% 12%, rgba(156, 255, 186, 0.12), transparent 22%),
+      radial-gradient(circle at 18% 84%, rgba(100, 242, 223, 0.1), transparent 26%),
+      linear-gradient(145deg, rgba(8, 24, 28, 0.78), rgba(4, 16, 19, 0.72));
+    backdrop-filter: blur(26px);
+  }
+
+  .record-frame {
+    position: relative;
+    display: grid;
+    gap: 16px;
+    padding: 18px;
+    margin-top: 6px;
+    border: 1px solid rgba(100, 242, 223, 0.14);
+    background:
+      linear-gradient(to bottom left, transparent 42%, rgba(100, 242, 223, 0.46) 46% 54%, transparent 58%) top right / 14px 14px no-repeat,
+      linear-gradient(to bottom left, transparent 42%, rgba(100, 242, 223, 0.46) 46% 54%, transparent 58%) bottom left / 14px 14px no-repeat,
+      linear-gradient(180deg, rgba(7, 27, 31, 0.54), rgba(3, 13, 16, 0.42));
+    box-shadow:
+      inset 0 0 0 1px rgba(255, 255, 255, 0.03),
+      inset 0 1px 0 rgba(255, 255, 255, 0.04),
+      0 0 30px rgba(100, 242, 223, 0.06);
+    clip-path: polygon(0 0, calc(100% - 14px) 0, 100% 14px, 100% 100%, 14px 100%, 0 calc(100% - 14px));
+    overflow: hidden;
+  }
+
+  .record-frame::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background:
+      radial-gradient(circle at 72% 24%, rgba(100, 242, 223, 0.08), transparent 20%),
+      radial-gradient(circle at 18% 72%, rgba(217, 255, 87, 0.05), transparent 18%),
+      linear-gradient(90deg, rgba(100, 242, 223, 0.07), transparent 24%, transparent 76%, rgba(100, 242, 223, 0.04));
+    pointer-events: none;
+  }
+
+  .record-banner {
+    position: relative;
+    z-index: 1;
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: space-between;
+    gap: 10px;
+    align-items: center;
+  }
+
+  .record-badge,
+  .record-id,
+  .detail-label {
+    font-family: 'Rajdhani', sans-serif;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+  }
+
+  .record-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 10px;
+    min-height: 38px;
+    padding: 9px 14px;
+    color: var(--text-0);
+    border: 1px solid rgba(100, 242, 223, 0.22);
+    background:
+      linear-gradient(to bottom left, transparent 42%, rgba(100, 242, 223, 0.54) 46% 54%, transparent 58%) top right / 12px 12px no-repeat,
+      linear-gradient(to bottom left, transparent 42%, rgba(100, 242, 223, 0.54) 46% 54%, transparent 58%) bottom left / 12px 12px no-repeat,
+      linear-gradient(90deg, rgba(100, 242, 223, 0.12), rgba(8, 24, 28, 0.44));
+    clip-path: polygon(0 0, calc(100% - 12px) 0, 100% 12px, 100% 100%, 12px 100%, 0 calc(100% - 12px));
+  }
+
+  .record-badge i {
+    width: 7px;
+    height: 7px;
+    border-radius: 50%;
+    background: var(--success);
+    box-shadow: 0 0 10px rgba(156, 255, 186, 0.72);
+  }
+
+  .record-id {
+    color: rgba(186, 219, 224, 0.7);
+    font-size: 0.76rem;
+  }
+
+  .detail-grid {
+    position: relative;
+    z-index: 1;
+    padding: 0;
+    border: 0;
+    background: none;
+    box-shadow: none;
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 12px;
+  }
+
+  .detail-cell {
+    min-width: 0;
+    padding: 16px 16px 15px;
+    border: 1px solid rgba(100, 242, 223, 0.14);
+    background:
+      linear-gradient(to bottom left, transparent 42%, rgba(100, 242, 223, 0.34) 46% 54%, transparent 58%) top right / 10px 10px no-repeat,
+      linear-gradient(to bottom left, transparent 42%, rgba(100, 242, 223, 0.34) 46% 54%, transparent 58%) bottom left / 10px 10px no-repeat,
+      linear-gradient(180deg, rgba(8, 26, 30, 0.58), rgba(4, 14, 17, 0.42));
+    backdrop-filter: blur(10px);
+    clip-path: polygon(0 0, calc(100% - 10px) 0, 100% 10px, 100% 100%, 10px 100%, 0 calc(100% - 10px));
+    box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.02);
+  }
+
+  .detail-cell p {
+    margin: 0;
+    color: var(--text-1);
+    line-height: 1.45;
+  }
+
+  .detail-cell strong {
+    display: inline-block;
+    color: var(--text-0);
+    font-family: 'Rajdhani', sans-serif;
+    font-size: 1.08rem;
+    font-weight: 500;
+    letter-spacing: 0.04em;
+  }
+
+  .detail-label {
+    display: inline-block;
+    margin-bottom: 8px;
+    color: rgba(148, 183, 188, 0.82);
+    font-size: 0.7rem;
+  }
+
+  .detail-cell-highlight {
+    border-color: rgba(156, 255, 186, 0.22);
+    background:
+      linear-gradient(to bottom left, transparent 42%, rgba(156, 255, 186, 0.42) 46% 54%, transparent 58%) top right / 10px 10px no-repeat,
+      linear-gradient(to bottom left, transparent 42%, rgba(100, 242, 223, 0.4) 46% 54%, transparent 58%) bottom left / 10px 10px no-repeat,
+      linear-gradient(135deg, rgba(12, 40, 32, 0.64), rgba(5, 18, 20, 0.48));
+  }
+
+  .detail-cell-highlight strong {
+    color: var(--success);
+    text-transform: uppercase;
+  }
+
+  .detail-cell-wide {
+    grid-column: 1 / -1;
   }
 
   /* Deep-space atmosphere and interface chrome. */
@@ -2048,6 +2221,20 @@
       padding: 24px;
       flex-direction: column;
       text-align: center;
+    }
+
+    .record-frame {
+      padding: 15px;
+    }
+
+    .record-banner,
+    .detail-grid {
+      grid-template-columns: 1fr;
+    }
+
+    .detail-cell,
+    .detail-cell-wide {
+      grid-column: auto;
     }
 
     .step-strip {
