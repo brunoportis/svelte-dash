@@ -3,6 +3,7 @@
   import { onDestroy, onMount } from 'svelte';
   import { Select } from 'bits-ui';
   import { emptyWizardState, seedContact } from './lib/demoData';
+  import { fetchSpaceWeatherSnapshot, type SpaceWeatherSnapshot } from './lib/spaceWeather';
   import { getRouteFromHash, toHash } from './lib/router';
   import {
     clearDemoData,
@@ -20,18 +21,18 @@
   import type { DemoContact, Route } from './lib/types';
 
   const steps = ['basic', 'address', 'owner', 'review'] as const;
-  const states = ['AC', 'AL', 'AP', 'AM', 'BA', 'CE', 'DF', 'ES', 'GO', 'MA', 'MT', 'MS', 'MG', 'PA', 'PB', 'PR', 'PE', 'PI', 'RJ', 'RN', 'RS', 'RO', 'RR', 'SC', 'SP', 'SE', 'TO'] as const;
+  const states = ['NOMINAL', 'ELEVATED', 'CRITICAL'] as const;
   const stateItems = states.map((state) => ({ value: state, label: state }));
   const navItems = [
     { label: 'Painel', href: '/dashboard', icon: 'grid' },
-    { label: 'Cadastro', href: '/contacts/new', icon: 'target' },
+    { label: 'Sentinels', href: '/contacts/new', icon: 'target' },
     { label: 'Acesso', href: '/login', icon: 'user' },
   ] as const;
   type Step = (typeof steps)[number];
   const stepLabels: Record<Step, string> = {
     basic: 'Identidade',
-    address: 'Endereço',
-    owner: 'Responsável',
+    address: 'Parametros',
+    owner: 'Acionamento',
     review: 'Revisão',
   };
 
@@ -64,36 +65,30 @@
   let editAddressError = '';
   let initialized = false;
   let currentSection = 'Acesso';
+  let spaceWeather: SpaceWeatherSnapshot | null = null;
+  let spaceWeatherLoading = false;
+  let spaceWeatherError = '';
+  let spaceWeatherTimer: ReturnType<typeof setInterval> | undefined;
 
   function getRouteLabel(currentRoute: Route): string {
     switch (currentRoute.name) {
       case 'dashboard':
         return 'Painel';
       case 'contact-new':
-        return 'Cadastro';
+        return 'Sentinels';
       case 'contact-detail':
-        return 'Contato';
+        return 'Sentinels';
       case 'contact-edit-address':
-        return 'Endereco';
+        return 'Sentinels';
       case 'login':
       default:
         return 'Acesso';
     }
   }
 
-  function onlyDigits(value: string): string {
-    return value.replace(/\D/g, '').slice(0, 8);
-  }
-
-  function formatCep(value: string): string {
-    const digits = onlyDigits(value);
-    if (digits.length <= 5) return digits;
-    return `${digits.slice(0, 5)}-${digits.slice(5)}`;
-  }
-
-  function autoFillFromCep(value: string) {
-    const digits = onlyDigits(value);
-    if (!digits) {
+  function getSignalPreset(value: string) {
+    const normalized = value.trim().toLowerCase();
+    if (!normalized) {
       return {
         cep: '',
         street: '',
@@ -103,33 +98,59 @@
       };
     }
 
-    const padded = digits.padEnd(8, '0');
-    const numeric = Number.parseInt(padded, 10);
-    const state = states[numeric % states.length];
+    if (normalized.includes('noaa') || normalized.includes('swpc') || normalized.includes('helios')) {
+      return {
+        cep: value.trim(),
+        street: 'solar_wind_speed',
+        number: '600',
+        city: '5 min',
+        state: 'ELEVATED',
+      };
+    }
+
+    if (normalized.includes('kp') || normalized.includes('geomag')) {
+      return {
+        cep: value.trim(),
+        street: 'planetary_k_index',
+        number: '5',
+        city: '1 cycle',
+        state: 'CRITICAL',
+      };
+    }
 
     return {
-      cep: formatCep(digits),
-      street: `Rua ${digits.slice(0, 4) || 'Demo'}`,
-      number: String((numeric % 9000) + 1),
-      city: `Cidade ${digits.slice(-3) || 'Demo'}`,
-      state,
+      cep: value.trim(),
+      street: '',
+      number: '',
+      city: '',
+      state: 'NOMINAL',
     };
   }
 
   function setWizardCep(value: string) {
+    const preset = getSignalPreset(value);
     wizard = {
       ...wizard,
       address: {
         ...wizard.address,
-        ...autoFillFromCep(value),
+        ...preset,
+        street: wizard.address.street || preset.street,
+        number: wizard.address.number || preset.number,
+        city: wizard.address.city || preset.city,
+        state: wizard.address.state || preset.state,
       },
     };
   }
 
   function setEditCep(value: string) {
+    const preset = getSignalPreset(value);
     editAddress = {
       ...editAddress,
-      ...autoFillFromCep(value),
+      ...preset,
+      street: editAddress.street || preset.street,
+      number: editAddress.number || preset.number,
+      city: editAddress.city || preset.city,
+      state: editAddress.state || preset.state,
     };
   }
 
@@ -139,6 +160,26 @@
 
   function handleEditCepInput(event: Event) {
     setEditCep((event.currentTarget as HTMLInputElement).value);
+  }
+
+  async function loadSpaceWeather() {
+    spaceWeatherLoading = true;
+    try {
+      spaceWeather = await fetchSpaceWeatherSnapshot();
+      spaceWeatherError = '';
+    } catch {
+      spaceWeatherError = 'Malha NOAA indisponível no momento';
+    } finally {
+      spaceWeatherLoading = false;
+    }
+  }
+
+  function getSentinelState(contact: DemoContact): string {
+    return contact.status === 'active' ? 'armed' : 'draft';
+  }
+
+  function getSentinelSubtitle(contact: DemoContact): string {
+    return `${contact.address.street} > ${contact.address.number} // ${contact.address.city}`;
   }
 
   function syncState() {
@@ -284,7 +325,7 @@
     loggedIn = false;
     sessionEmail = '';
     contacts = [];
-    setFlash('Dados de demonstração resetados');
+    setFlash('Malha sentinel resetada');
     navigate('/login');
     syncState();
   }
@@ -293,7 +334,7 @@
     const existing = readContacts();
     if (existing.length === 0) {
       writeContacts([seedContact]);
-      setFlash('Contato seed criado');
+      setFlash('Sentinel demo inicializado');
     }
     syncState();
   }
@@ -310,21 +351,21 @@
     wizardError = '';
     if (wizardStep === 'basic') {
       if (!wizard.name.trim() || !wizard.document.trim()) {
-        wizardError = 'Preencha nome e documento';
+        wizardError = 'Preencha nome e codigo do protocolo';
         return;
       }
     }
 
     if (wizardStep === 'address') {
       if (!wizard.address.cep.trim() || !wizard.address.street.trim() || !wizard.address.number.trim()) {
-        wizardError = 'Preencha CEP e endereço';
+        wizardError = 'Preencha fonte, metrica e limite';
         return;
       }
     }
 
     if (wizardStep === 'owner') {
       if (!wizard.owner.name.trim() || !wizard.owner.email.trim()) {
-        wizardError = 'Preencha nome e email do responsável';
+        wizardError = 'Preencha acao e canal de notificacao';
         return;
       }
     }
@@ -349,15 +390,15 @@
 
   function finishWizard() {
     if (!wizard.name.trim() || !wizard.document.trim()) {
-      wizardError = 'Preencha nome e documento';
+      wizardError = 'Preencha nome e codigo do protocolo';
       return;
     }
     if (!wizard.address.cep.trim() || !wizard.address.street.trim() || !wizard.address.number.trim()) {
-      wizardError = 'Preencha CEP e endereço';
+      wizardError = 'Preencha fonte, metrica e limite';
       return;
     }
     if (!wizard.owner.name.trim() || !wizard.owner.email.trim()) {
-      wizardError = 'Preencha nome e email do responsável';
+      wizardError = 'Preencha acao e canal de notificacao';
       return;
     }
 
@@ -372,7 +413,7 @@
     };
 
     upsertContact(contact);
-    setFlash('Contato cadastrado com sucesso');
+    setFlash('Sentinel armado com sucesso');
     navigate(`/contacts/${id}`);
     syncState();
   }
@@ -381,7 +422,7 @@
     if (!currentContact) return;
 
     if (!editAddress.cep.trim() || !editAddress.street.trim() || !editAddress.number.trim()) {
-      editAddressError = 'CEP, rua e número são obrigatórios';
+      editAddressError = 'Fonte, metrica e limite sao obrigatorios';
       return;
     }
 
@@ -391,7 +432,7 @@
       address: { ...editAddress },
     };
     upsertContact(updated);
-    setFlash('Endereço atualizado com sucesso');
+    setFlash('Parametros do sentinel atualizados');
     navigate(`/contacts/${currentContact.id}`);
     syncState();
   }
@@ -410,9 +451,11 @@
     }
 
     syncState();
+    loadSpaceWeather();
     initialized = true;
     ensureAuth();
     window.addEventListener('hashchange', handleHashChange);
+    spaceWeatherTimer = setInterval(loadSpaceWeather, 60_000);
   });
 
   onDestroy(() => {
@@ -420,6 +463,7 @@
     if (flashTimer) clearTimeout(flashTimer);
     if (flashDismissTimer) clearTimeout(flashDismissTimer);
     if (flashProgressFrame) cancelAnimationFrame(flashProgressFrame);
+    if (spaceWeatherTimer) clearInterval(spaceWeatherTimer);
   });
 
   $: if (initialized && route.name === 'unknown') {
@@ -454,7 +498,7 @@
       </div>
       <div>
         <p class="eyebrow">Orbital Console</p>
-        <strong>dash-svelte</strong>
+        <strong>Helios Sentinel</strong>
       </div>
     </div>
 
@@ -537,54 +581,100 @@
         <span class="panel-index">OVERVIEW // 001</span>
         <div>
           <p class="eyebrow">Mission Overview</p>
-          <h1>Bem-vindo</h1>
-          <p class="lede">Ambiente pronto para cadastro, consulta e manutenção de contatos.</p>
+          <h1>Helios Sentinel</h1>
+          <p class="lede">Console de vigilancia orbital alimentado por telemetria NOAA em tempo quase real.</p>
           <div class="info-strip">
-            <span class="info-chip">contatos: {contacts.length}</span>
+            <span class="info-chip">sentinels: {contacts.length}</span>
             <span class="info-chip">{sessionEmail}</span>
+            {#if spaceWeather}
+              <span class={`info-chip info-chip-${spaceWeather.statusSeverity}`}>{spaceWeather.statusLabel}</span>
+            {/if}
           </div>
         </div>
         <div class="actions">
-          <button data-testid="start-contact-wizard" on:click={startWizard}>Cadastrar contato</button>
-          <button data-testid="seed-demo-contact" class="button-ghost" on:click={seedDemoContact}>Seed contato demo</button>
+          <button data-testid="start-contact-wizard" on:click={startWizard}>Criar sentinel</button>
+          <button data-testid="seed-demo-contact" class="button-ghost" on:click={seedDemoContact}>Seed sentinel demo</button>
           <button data-testid="reset-demo-data" class="button-ghost" on:click={resetDemoData}>Reset demo data</button>
           <button data-testid="logout" class="button-ghost" on:click={logout}>Sair</button>
         </div>
       </section>
 
       <section class="telemetry-grid" aria-label="Telemetria do sistema">
-        <div class="telemetry-card" style="--card-index: 0"><span>Registros ativos</span><strong>{String(contacts.length).padStart(2, '0')}</strong><i style={`--level: ${Math.min(100, 18 + contacts.length * 12)}%`}></i></div>
-        <div class="telemetry-card" style="--card-index: 1"><span>Integridade do núcleo</span><strong>99.8<small>%</small></strong><i style="--level: 92%"></i></div>
-        <div class="telemetry-card" style="--card-index: 2"><span>Canal de dados</span><strong>12<small>ms</small></strong><i style="--level: 74%"></i></div>
+        <div class="telemetry-card" style="--card-index: 0"><span>Sentinels armados</span><strong>{String(contacts.length).padStart(2, '0')}</strong><i style={`--level: ${Math.min(100, 18 + contacts.length * 12)}%`}></i></div>
+        <div class={`telemetry-card telemetry-card-${spaceWeather?.metrics.particleFlux.status ?? 'nominal'}`} style="--card-index: 1"><span>{spaceWeather?.metrics.particleFlux.label ?? 'Fluxo de particulas'}</span><strong>{spaceWeather?.metrics.particleFlux.value ?? '--'}<small>{spaceWeather?.metrics.particleFlux.unit ?? 'km/s'}</small></strong><i style={`--level: ${spaceWeather?.metrics.particleFlux.level ?? 12}%`}></i></div>
+        <div class={`telemetry-card telemetry-card-${spaceWeather?.metrics.magneticStability.status ?? 'nominal'}`} style="--card-index: 2"><span>{spaceWeather?.metrics.magneticStability.label ?? 'Estabilidade magnetica'}</span><strong>{spaceWeather?.metrics.magneticStability.value ?? '--'}<small>{spaceWeather?.metrics.magneticStability.unit ?? 'Bz/Bt'}</small></strong><i style={`--level: ${spaceWeather?.metrics.magneticStability.level ?? 14}%`}></i></div>
+        <div class={`telemetry-card telemetry-card-${spaceWeather?.metrics.orbitalRisk.status ?? 'nominal'}`} style="--card-index: 3"><span>{spaceWeather?.metrics.orbitalRisk.label ?? 'Indice de risco orbital'}</span><strong>{spaceWeather?.metrics.orbitalRisk.value ?? '--'}<small>{spaceWeather?.metrics.orbitalRisk.unit ?? 'Kp'}</small></strong><i style={`--level: ${spaceWeather?.metrics.orbitalRisk.level ?? 16}%`}></i></div>
       </section>
 
-      <section class="panel">
-        <span class="panel-index">DIRECTORY // {String(contacts.length).padStart(3, '0')}</span>
-        <div class="panel-rule"></div>
-        <div class="panel-header">
-          <div>
-            <p class="eyebrow">Directory</p>
-            <h2>Lista de contatos</h2>
+      <section class="dashboard-grid">
+        <section class="panel panel-feed">
+          <span class="panel-index">SIGNAL // NOAA</span>
+          <div class="panel-rule"></div>
+          <div class="panel-header">
+            <div>
+              <p class="eyebrow">Signal Feed</p>
+              <h2>Anomalias interceptadas</h2>
+            </div>
+            <p class="muted">{spaceWeather?.source ?? 'NOAA / SWPC'}{spaceWeather ? ` // ${spaceWeather.updatedAt}` : ''}</p>
           </div>
-          <p class="muted">Logado como: {sessionEmail}</p>
-        </div>
-        <div data-testid="contact-list" class="list">
-          {#if contacts.length === 0}
-            <div class="empty-state">
+          {#if spaceWeatherError}
+            <div class="empty-state empty-state-compact">
               <span class="empty-radar" aria-hidden="true"><i></i></span>
-              <div><strong>Nenhum sinal identificado</strong><p class="muted">Cadastre um contato ou inicialize os dados de demonstração.</p></div>
+              <div><strong>Link de telemetria indisponível</strong><p class="muted">{spaceWeatherError}</p></div>
+            </div>
+          {:else if !spaceWeather && spaceWeatherLoading}
+            <div class="empty-state empty-state-compact">
+              <span class="empty-radar" aria-hidden="true"><i></i></span>
+              <div><strong>Sincronizando heliosfera</strong><p class="muted">Aguardando primeiro pacote de telemetria oficial.</p></div>
             </div>
           {:else}
-            {#each contacts as contact, index}
-              <a data-testid="contact-list-item" class="list-item" style={`--item-index: ${index}`} href={toHash(`/contacts/${contact.id}`)}>
-                <span class="list-index">{String(index + 1).padStart(2, '0')}</span>
-                <span class="list-copy"><strong>{contact.name}</strong><span>{contact.document}</span></span>
-                <span class="list-status"><i></i>ativo</span>
-                <span class="list-arrow" aria-hidden="true">&#8599;</span>
-              </a>
-            {/each}
+            <div class="signal-feed">
+              <div class={`signal-status signal-status-${spaceWeather?.statusSeverity ?? 'nominal'}`}>
+                <strong>Status da malha</strong>
+                <span>{spaceWeather?.statusLabel ?? 'nominal'}</span>
+                <small>Atualizado em {spaceWeather?.updatedAt ?? '--'}</small>
+              </div>
+              {#each spaceWeather?.feed ?? [] as item, index}
+                <article class={`signal-item signal-item-${item.severity}`} style={`--item-index: ${index}`}>
+                  <div>
+                    <strong>{item.title}</strong>
+                    <p>{item.detail}</p>
+                  </div>
+                  <span>{item.issuedAt}</span>
+                </article>
+              {/each}
+            </div>
           {/if}
-        </div>
+        </section>
+
+        <section class="panel">
+          <span class="panel-index">REGISTRY // {String(contacts.length).padStart(3, '0')}</span>
+          <div class="panel-rule"></div>
+          <div class="panel-header">
+            <div>
+              <p class="eyebrow">Sentinel Registry</p>
+              <h2>Lista de sentinels</h2>
+            </div>
+            <p class="muted">Logado como: {sessionEmail}</p>
+          </div>
+          <div data-testid="contact-list" class="list">
+            {#if contacts.length === 0}
+              <div class="empty-state">
+                <span class="empty-radar" aria-hidden="true"><i></i></span>
+                <div><strong>Nenhum sentinel armado</strong><p class="muted">Crie um sentinel ou inicialize o registro de demonstração.</p></div>
+              </div>
+            {:else}
+              {#each contacts as contact, index}
+                <a data-testid="contact-list-item" class="list-item" style={`--item-index: ${index}`} href={toHash(`/contacts/${contact.id}`)}>
+                  <span class="list-index">{String(index + 1).padStart(2, '0')}</span>
+                  <span class="list-copy"><strong>{contact.name}</strong><span>{contact.document} // {getSentinelSubtitle(contact)}</span></span>
+                  <span class="list-status"><i></i>{getSentinelState(contact)}</span>
+                  <span class="list-arrow" aria-hidden="true">&#8599;</span>
+                </a>
+              {/each}
+            {/if}
+          </div>
+        </section>
       </section>
     </main>
   {:else if route.name === 'contact-new'}
@@ -595,7 +685,7 @@
         <div class="panel-header">
           <div>
             <p class="eyebrow">Sequence Builder</p>
-            <h1>Cadastrar contato</h1>
+            <h1>Armar sentinel</h1>
           </div>
           <p class="muted">Logado como: {sessionEmail}</p>
         </div>
@@ -616,35 +706,35 @@
             >
               {#if wizardStep === 'basic'}
                 <div data-testid="contact-wizard-step-basic">
-                  <h2>Etapa 1: Dados do contato</h2>
+                  <h2>Etapa 1: Identidade do sentinel</h2>
                   <label>
-                    Nome do contato
+                    Nome do sentinel
                     <input data-testid="contact-name" bind:value={wizard.name} />
                   </label>
                   <label>
-                    Documento
+                    Codigo do protocolo
                     <input data-testid="contact-document" bind:value={wizard.document} />
                   </label>
                 </div>
               {:else if wizardStep === 'address'}
                 <div data-testid="contact-wizard-step-address">
-                  <h2>Etapa 2: Endereço</h2>
+                  <h2>Etapa 2: Parametros de disparo</h2>
                   <label>
-                    CEP
+                    Fonte do sinal
                     <input
                       data-testid="contact-cep"
                       value={wizard.address.cep}
                       on:input={handleWizardCepInput}
                     />
                   </label>
-                  <label>Rua <input data-testid="contact-street" bind:value={wizard.address.street} /></label>
-                  <label>Número <input data-testid="contact-number" bind:value={wizard.address.number} /></label>
-                  <label>Cidade <input data-testid="contact-city" bind:value={wizard.address.city} /></label>
+                  <label>Metrica monitorada <input data-testid="contact-street" bind:value={wizard.address.street} /></label>
+                  <label>Limite <input data-testid="contact-number" bind:value={wizard.address.number} /></label>
+                  <label>Janela de observacao <input data-testid="contact-city" bind:value={wizard.address.city} /></label>
                   <label>
-                    Estado
+                    Severidade
                     <Select.Root type="single" bind:value={wizard.address.state} items={stateItems}>
                       <Select.Trigger data-testid="contact-state" class="select-trigger">
-                        <Select.Value placeholder="Selecione o estado" />
+                        <Select.Value placeholder="Selecione a severidade" />
                       </Select.Trigger>
                       <Select.Portal>
                         <Select.Content class="select-content" sideOffset={8}>
@@ -662,26 +752,26 @@
                 </div>
               {:else if wizardStep === 'owner'}
                 <div data-testid="contact-wizard-step-owner">
-                  <h2>Etapa 3: Responsável</h2>
+                  <h2>Etapa 3: Acionamento</h2>
                   <label>
-                    Nome do responsável
+                    Acao ao disparar
                     <input data-testid="contact-owner-name" bind:value={wizard.owner.name} />
                   </label>
                   <label>
-                    Email do responsável
-                    <input data-testid="contact-owner-email" type="email" bind:value={wizard.owner.email} />
+                    Canal de notificacao
+                    <input data-testid="contact-owner-email" bind:value={wizard.owner.email} />
                   </label>
                 </div>
               {:else}
                 <div data-testid="contact-wizard-step-review" class="review-card">
                   <h2>Etapa 4: Revisão</h2>
-                  <p data-testid="review-contact-name"><strong>Nome:</strong> {wizard.name}</p>
-                  <p data-testid="review-contact-document"><strong>Documento:</strong> {wizard.document}</p>
+                  <p data-testid="review-contact-name"><strong>Sentinel:</strong> {wizard.name}</p>
+                  <p data-testid="review-contact-document"><strong>Protocolo:</strong> {wizard.document}</p>
                   <p data-testid="review-contact-address">
-                    <strong>Endereço:</strong> {wizard.address.street}, {wizard.address.number} - {wizard.address.city}/{wizard.address.state} - {wizard.address.cep}
+                    <strong>Trigger:</strong> {wizard.address.cep} // {wizard.address.street} > {wizard.address.number} por {wizard.address.city} [{wizard.address.state}]
                   </p>
                   <p data-testid="review-contact-owner">
-                    <strong>Responsável:</strong> {wizard.owner.name} ({wizard.owner.email})
+                    <strong>Acionamento:</strong> {wizard.owner.name} ({wizard.owner.email})
                   </p>
                 </div>
               {/if}
@@ -697,7 +787,7 @@
           {#if wizardStep !== 'review'}
             <button data-testid="contact-wizard-next" type="button" on:click={nextStep}>Próximo</button>
           {:else}
-            <button data-testid="contact-wizard-finish" type="button" on:click={finishWizard}>Finalizar cadastro</button>
+            <button data-testid="contact-wizard-finish" type="button" on:click={finishWizard}>Armar sentinel</button>
           {/if}
         </div>
       </section>
@@ -710,38 +800,38 @@
           <div class="panel-rule"></div>
           <div class="panel-header">
             <div>
-              <p class="eyebrow">Contact Record</p>
-              <h1>Contato cadastrado com sucesso</h1>
+              <p class="eyebrow">Sentinel Record</p>
+              <h1>Sentinel armado com sucesso</h1>
             </div>
             <p class="muted">Logado como: {sessionEmail}</p>
           </div>
           <div class="record-frame">
             <div class="record-banner">
               <span class="record-badge"><i></i>Registro estabilizado</span>
-              <span class="record-id">ID // {String(currentContact.id).padStart(4, '0')}</span>
+              <span class="record-id">ID // {currentContact.id}</span>
             </div>
 
             <div class="detail-grid">
               <div class="detail-cell detail-cell-highlight">
                 <span class="detail-label">Status operacional</span>
-                <p data-testid="contact-detail-status"><strong>{currentContact.status}</strong></p>
+                <p data-testid="contact-detail-status"><strong>{getSentinelState(currentContact)}</strong></p>
               </div>
               <div class="detail-cell">
-                <span class="detail-label">Nome</span>
+                <span class="detail-label">Sentinel</span>
                 <p data-testid="contact-detail-name"><strong>{currentContact.name}</strong></p>
               </div>
               <div class="detail-cell">
-                <span class="detail-label">Documento</span>
+                <span class="detail-label">Protocolo</span>
                 <p data-testid="contact-detail-document"><strong>{currentContact.document}</strong></p>
               </div>
               <div class="detail-cell detail-cell-wide">
-                <span class="detail-label">Endereço</span>
+                <span class="detail-label">Parametros de trigger</span>
                 <p data-testid="contact-detail-address">
-                  <strong>{currentContact.address.street}, {currentContact.address.number}</strong> - {currentContact.address.city}/{currentContact.address.state} - {currentContact.address.cep}
+                  <strong>{currentContact.address.cep}</strong> // {currentContact.address.street} &gt; {currentContact.address.number} por {currentContact.address.city} [{currentContact.address.state}]
                 </p>
               </div>
               <div class="detail-cell detail-cell-wide">
-                <span class="detail-label">Responsável</span>
+                <span class="detail-label">Acionamento</span>
                 <p data-testid="contact-detail-owner">
                   <strong>{currentContact.owner.name}</strong> ({currentContact.owner.email})
                 </p>
@@ -750,7 +840,7 @@
           </div>
           <div class="actions">
             <button data-testid="edit-address" type="button" on:click={() => navigate(`/contacts/${currentContact.id}/edit-address`)}>
-              Editar endereço
+              Editar parametros
             </button>
             <button data-testid="back-to-dashboard" class="button-ghost" type="button" on:click={() => navigate('/dashboard')}>
               Voltar ao dashboard
@@ -762,7 +852,7 @@
         <section class="panel narrow">
           <span class="panel-index">ERROR // 404</span>
           <div class="panel-rule"></div>
-          <h1>Contato não encontrado</h1>
+          <h1>Sentinel não encontrado</h1>
           <div class="actions">
             <button type="button" on:click={() => navigate('/dashboard')}>Voltar ao dashboard</button>
           </div>
@@ -777,27 +867,27 @@
           <div class="panel-rule"></div>
           <div class="panel-header">
             <div>
-              <p class="eyebrow">Address Override</p>
-              <h1>Editar endereço</h1>
+              <p class="eyebrow">Sentinel Override</p>
+              <h1>Editar parametros</h1>
             </div>
             <p class="muted">Logado como: {sessionEmail}</p>
           </div>
           <label>
-            CEP
+            Fonte do sinal
             <input
               data-testid="edit-contact-cep"
               value={editAddress.cep}
               on:input={handleEditCepInput}
             />
           </label>
-          <label>Rua <input data-testid="edit-contact-street" bind:value={editAddress.street} /></label>
-          <label>Número <input data-testid="edit-contact-number" bind:value={editAddress.number} /></label>
-          <label>Cidade <input data-testid="edit-contact-city" bind:value={editAddress.city} /></label>
+          <label>Metrica monitorada <input data-testid="edit-contact-street" bind:value={editAddress.street} /></label>
+          <label>Limite <input data-testid="edit-contact-number" bind:value={editAddress.number} /></label>
+          <label>Janela de observacao <input data-testid="edit-contact-city" bind:value={editAddress.city} /></label>
           <label>
-            Estado
+            Severidade
             <Select.Root type="single" bind:value={editAddress.state} items={stateItems}>
               <Select.Trigger data-testid="edit-contact-state" class="select-trigger">
-                <Select.Value placeholder="Selecione o estado" />
+                <Select.Value placeholder="Selecione a severidade" />
               </Select.Trigger>
               <Select.Portal>
                 <Select.Content class="select-content" sideOffset={8}>
@@ -815,7 +905,7 @@
           <p class="error" data-testid="edit-address-error">{editAddressError}</p>
           <div class="actions">
             <button data-testid="cancel-address" class="button-ghost" type="button" on:click={cancelAddress}>Cancelar</button>
-            <button data-testid="save-address" type="button" on:click={saveAddress}>Salvar endereço</button>
+            <button data-testid="save-address" type="button" on:click={saveAddress}>Salvar parametros</button>
             <button data-testid="logout" class="button-ghost" type="button" on:click={logout}>Sair</button>
           </div>
         </section>
@@ -823,7 +913,7 @@
         <section class="panel narrow">
           <span class="panel-index">ERROR // 404</span>
           <div class="panel-rule"></div>
-          <h1>Contato não encontrado</h1>
+          <h1>Sentinel não encontrado</h1>
           <div class="actions">
             <button type="button" on:click={() => navigate('/dashboard')}>Voltar ao dashboard</button>
           </div>
@@ -1742,9 +1832,16 @@
   .panel-hero { grid-template-columns: minmax(0, 1fr) minmax(250px, 0.55fr); }
   .panel-hero > .actions { justify-content: flex-end; max-width: 430px; margin-top: 4px; }
 
+  .dashboard-grid {
+    display: grid;
+    grid-template-columns: minmax(0, 0.92fr) minmax(0, 1.08fr);
+    gap: 18px;
+    align-items: start;
+  }
+
   .telemetry-grid {
     display: grid;
-    grid-template-columns: repeat(3, 1fr);
+    grid-template-columns: repeat(4, 1fr);
     gap: 12px;
     margin-bottom: 24px;
   }
@@ -1765,6 +1862,87 @@
   .telemetry-card strong { display: block; margin-top: 4px; color: var(--cyan); font-family: 'Rajdhani', sans-serif; font-size: 2.1rem; font-weight: 500; line-height: 1; }
   .telemetry-card small { margin-left: 3px; color: var(--text-2); font-size: 0.78rem; }
   .telemetry-card > i { position: absolute; right: 0; bottom: 0; left: 0; height: 2px; transform-origin: left; background: linear-gradient(90deg, var(--cyan) var(--level), rgba(100, 242, 223, 0.08) var(--level)); box-shadow: 0 0 9px rgba(100, 242, 223, 0.28); animation: telemetry-fill 780ms cubic-bezier(0.2, 0.9, 0.16, 1) both; animation-delay: calc(220ms + (var(--card-index, 0) * 70ms)); }
+
+  .telemetry-card-elevated { border-color: rgba(217, 255, 87, 0.28); }
+  .telemetry-card-critical { border-color: rgba(255, 142, 121, 0.34); }
+  .telemetry-card-critical strong { color: #ff8e79; }
+
+  .signal-feed {
+    display: grid;
+    gap: 12px;
+  }
+
+  .signal-status {
+    display: grid;
+    gap: 4px;
+    padding: 15px 16px;
+    border: 1px solid rgba(100, 242, 223, 0.16);
+    background:
+      linear-gradient(to bottom left, transparent 42%, rgba(100, 242, 223, 0.38) 46% 54%, transparent 58%) top right / 12px 12px no-repeat,
+      linear-gradient(to bottom left, transparent 42%, rgba(100, 242, 223, 0.38) 46% 54%, transparent 58%) bottom left / 12px 12px no-repeat,
+      linear-gradient(180deg, rgba(8, 26, 30, 0.72), rgba(4, 14, 17, 0.54));
+    clip-path: polygon(0 0, calc(100% - 12px) 0, 100% 12px, 100% 100%, 12px 100%, 0 calc(100% - 12px));
+  }
+
+  .signal-status strong,
+  .signal-item strong {
+    font-family: 'Rajdhani', sans-serif;
+    font-weight: 500;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+  }
+
+  .signal-status span {
+    color: var(--text-0);
+    font-size: 1.3rem;
+    text-transform: uppercase;
+  }
+
+  .signal-status small {
+    color: var(--text-2);
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+  }
+
+  .signal-status-elevated { border-color: rgba(217, 255, 87, 0.28); }
+  .signal-status-elevated span { color: var(--lime); }
+  .signal-status-critical { border-color: rgba(255, 142, 121, 0.3); }
+  .signal-status-critical span { color: #ff8e79; }
+
+  .signal-item {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    gap: 12px;
+    align-items: start;
+    padding: 15px 16px;
+    border: 1px solid rgba(100, 242, 223, 0.14);
+    background:
+      linear-gradient(to bottom left, transparent 42%, rgba(100, 242, 223, 0.32) 46% 54%, transparent 58%) top right / 10px 10px no-repeat,
+      linear-gradient(to bottom left, transparent 42%, rgba(100, 242, 223, 0.32) 46% 54%, transparent 58%) bottom left / 10px 10px no-repeat,
+      linear-gradient(180deg, rgba(7, 24, 28, 0.68), rgba(4, 13, 16, 0.46));
+    clip-path: polygon(0 0, calc(100% - 10px) 0, 100% 10px, 100% 100%, 10px 100%, 0 calc(100% - 10px));
+    animation: list-item-in 320ms ease-out both;
+    animation-delay: calc(140ms + (min(var(--item-index, 0), 8) * 48ms));
+  }
+
+  .signal-item p {
+    margin: 5px 0 0;
+    color: var(--text-1);
+    font-size: 0.86rem;
+  }
+
+  .signal-item > span {
+    color: var(--text-2);
+    font-family: 'Rajdhani', sans-serif;
+    font-size: 0.72rem;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    white-space: nowrap;
+  }
+
+  .signal-item-elevated { border-color: rgba(217, 255, 87, 0.22); }
+  .signal-item-critical { border-color: rgba(255, 142, 121, 0.28); }
+  .signal-item-critical strong { color: #ff8e79; }
 
   .list-item {
     --row-corner: rgba(100, 242, 223, 0.48);
@@ -1792,6 +1970,7 @@
   .list-item:hover .list-arrow { transform: translate(2px, -2px); }
 
   .empty-state { min-height: 170px; display: flex; align-items: center; justify-content: center; gap: 26px; border: 1px dashed rgba(100, 242, 223, 0.2); background: rgba(3, 14, 17, 0.38); }
+  .empty-state-compact { min-height: 200px; }
   .empty-state strong { font-family: 'Rajdhani', sans-serif; font-size: 1.05rem; font-weight: 500; letter-spacing: 0.1em; text-transform: uppercase; }
   .empty-radar { position: relative; width: 62px; height: 62px; border: 1px solid rgba(100, 242, 223, 0.35); border-radius: 50%; box-shadow: inset 0 0 20px rgba(100, 242, 223, 0.08); }
   .empty-radar::before, .empty-radar::after { content: ''; position: absolute; background: rgba(100, 242, 223, 0.2); }
@@ -1900,6 +2079,18 @@
       linear-gradient(to bottom left, transparent 42%, var(--status-corner) 46% 54%, transparent 58%) top right / 10px 10px no-repeat,
       linear-gradient(to bottom left, transparent 42%, var(--status-corner) 46% 54%, transparent 58%) bottom left / 10px 10px no-repeat,
       linear-gradient(rgba(100, 242, 223, 0.06), rgba(100, 242, 223, 0.06));
+  }
+
+  .info-chip-elevated {
+    color: var(--lime);
+    border-color: rgba(217, 255, 87, 0.34);
+    box-shadow: inset 0 0 0 1px rgba(217, 255, 87, 0.05);
+  }
+
+  .info-chip-critical {
+    color: #ff8e79;
+    border-color: rgba(255, 142, 121, 0.34);
+    box-shadow: inset 0 0 0 1px rgba(255, 142, 121, 0.05);
   }
 
   .step-strip span {
@@ -2177,6 +2368,11 @@
       max-width: none;
       margin-top: 22px;
     }
+
+    .dashboard-grid,
+    .telemetry-grid {
+      grid-template-columns: 1fr 1fr;
+    }
   }
 
   @media (max-width: 720px) {
@@ -2229,6 +2425,10 @@
       grid-template-columns: 1fr;
     }
 
+    .dashboard-grid {
+      grid-template-columns: 1fr;
+    }
+
     .panel {
       padding: 22px;
     }
@@ -2250,6 +2450,10 @@
       padding: 24px;
       flex-direction: column;
       text-align: center;
+    }
+
+    .signal-item {
+      grid-template-columns: 1fr;
     }
 
     .record-frame {

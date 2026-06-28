@@ -18,18 +18,18 @@ export const emptyWizardState = (): ContactWizardState => ({
 
 export const seedContact: DemoContact = {
   id: 'contact-1',
-  name: 'Contato Seed',
-  document: '12345678000199',
+  name: 'Solar Rift Watcher',
+  document: 'SRW-042',
   address: {
-    cep: '11111111',
-    street: 'Rua Fictícia',
-    number: '12',
-    city: 'Cidade Demo',
-    state: 'SP',
+    cep: 'NOAA / SWPC',
+    street: 'solar_wind_speed',
+    number: '600',
+    city: '5 min',
+    state: 'ELEVATED',
   },
   owner: {
-    name: 'Maria Demo',
-    email: 'maria@example.com',
+    name: 'Emitir alerta de estacao',
+    email: 'bridge-console',
   },
   status: 'active',
 };
