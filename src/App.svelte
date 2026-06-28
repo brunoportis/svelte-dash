@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { fly } from 'svelte/transition';
   import { onDestroy, onMount } from 'svelte';
   import { Select } from 'bits-ui';
   import { emptyWizardState, seedContact } from './lib/demoData';
@@ -40,7 +41,15 @@
   let contacts: DemoContact[] = [];
   let flashMessage = '';
   let flashTimer: ReturnType<typeof setTimeout> | undefined;
+  let flashDismissTimer: ReturnType<typeof setTimeout> | undefined;
+  let flashStartedAt = 0;
+  let flashRemaining = 4200;
+  let flashProgress = 1;
+  let flashVisible = false;
+  let flashExiting = false;
+  let flashProgressFrame: number | undefined;
   let wizardStep: Step = 'basic';
+  let wizardDirection: 1 | -1 = 1;
   let wizard = emptyWizardState();
   let editAddress = {
     cep: '',
@@ -157,18 +166,74 @@
   }
 
   function showFlash(message: string) {
-    flashMessage = message;
     if (flashTimer) clearTimeout(flashTimer);
-    flashTimer = setTimeout(() => {
-      flashMessage = '';
-      flashTimer = undefined;
-    }, 4200);
+    if (flashDismissTimer) clearTimeout(flashDismissTimer);
+    if (flashProgressFrame) cancelAnimationFrame(flashProgressFrame);
+    flashMessage = message;
+    flashVisible = true;
+    flashExiting = false;
+    flashRemaining = 4200;
+    flashProgress = 1;
+    startFlashCountdown();
   }
 
   function dismissFlash() {
-    flashMessage = '';
     if (flashTimer) clearTimeout(flashTimer);
     flashTimer = undefined;
+    if (flashProgressFrame) cancelAnimationFrame(flashProgressFrame);
+    flashProgressFrame = undefined;
+    if (!flashMessage || flashExiting) return;
+    flashExiting = true;
+    flashDismissTimer = setTimeout(clearFlash, 220);
+  }
+
+  function clearFlash() {
+    flashMessage = '';
+    flashVisible = false;
+    flashExiting = false;
+    flashRemaining = 4200;
+    flashProgress = 1;
+    if (flashTimer) clearTimeout(flashTimer);
+    if (flashDismissTimer) clearTimeout(flashDismissTimer);
+    if (flashProgressFrame) cancelAnimationFrame(flashProgressFrame);
+    flashTimer = undefined;
+    flashDismissTimer = undefined;
+    flashProgressFrame = undefined;
+  }
+
+  function updateFlashProgress() {
+    const elapsed = performance.now() - flashStartedAt;
+    flashProgress = Math.max(0, Math.min(1, 1 - elapsed / flashRemaining));
+    if (flashProgress > 0 && !flashExiting) {
+      flashProgressFrame = requestAnimationFrame(updateFlashProgress);
+    } else {
+      flashProgressFrame = undefined;
+    }
+  }
+
+  function startFlashCountdown() {
+    if (flashTimer) clearTimeout(flashTimer);
+    if (flashProgressFrame) cancelAnimationFrame(flashProgressFrame);
+    flashStartedAt = performance.now();
+    flashTimer = setTimeout(() => {
+      flashTimer = undefined;
+      dismissFlash();
+    }, flashRemaining);
+    flashProgressFrame = requestAnimationFrame(updateFlashProgress);
+  }
+
+  function pauseFlashCountdown() {
+    if (!flashVisible || flashExiting || !flashTimer) return;
+    flashRemaining = Math.max(0, flashRemaining - (performance.now() - flashStartedAt));
+    clearTimeout(flashTimer);
+    flashTimer = undefined;
+    if (flashProgressFrame) cancelAnimationFrame(flashProgressFrame);
+    flashProgressFrame = undefined;
+  }
+
+  function resumeFlashCountdown() {
+    if (!flashVisible || flashExiting || flashTimer || flashRemaining <= 0) return;
+    startFlashCountdown();
   }
 
   function navigate(path: string) {
@@ -235,6 +300,7 @@
 
   function startWizard() {
     wizard = emptyWizardState();
+    wizardDirection = 1;
     wizardStep = 'basic';
     wizardError = '';
     navigate('/contacts/new');
@@ -265,6 +331,7 @@
 
     const index = steps.indexOf(wizardStep);
     if (index < steps.length - 1) {
+      wizardDirection = 1;
       wizardStep = steps[index + 1];
     }
   }
@@ -273,6 +340,7 @@
     wizardError = '';
     const index = steps.indexOf(wizardStep);
     if (index > 0) {
+      wizardDirection = -1;
       wizardStep = steps[index - 1];
     } else {
       navigate('/dashboard');
@@ -350,6 +418,8 @@
   onDestroy(() => {
     window.removeEventListener('hashchange', handleHashChange);
     if (flashTimer) clearTimeout(flashTimer);
+    if (flashDismissTimer) clearTimeout(flashDismissTimer);
+    if (flashProgressFrame) cancelAnimationFrame(flashProgressFrame);
   });
 
   $: if (initialized && route.name === 'unknown') {
@@ -419,12 +489,20 @@
     <span>DS-01</span><i></i><em>OPERATIONS NETWORK</em><i></i><span>V1.0.0</span>
   </div>
 
-  {#if flashMessage}
-    <div class="flash" data-testid="flash-message" role="status">
+  {#if flashMessage && flashVisible}
+    <div
+      class:flash-exiting={flashExiting}
+      class="flash"
+      data-testid="flash-message"
+      role="status"
+      on:mouseenter={pauseFlashCountdown}
+      on:mouseleave={resumeFlashCountdown}
+      transition:fly={{ y: -10, duration: 220, opacity: 0.2 }}
+    >
       <span class="flash-signal" aria-hidden="true"><i></i></span>
       <span class="flash-copy"><small>System notification</small>{flashMessage}</span>
       <button class="flash-close" type="button" aria-label="Fechar notificação" on:click={dismissFlash}>×</button>
-      <i class="flash-progress" aria-hidden="true"></i>
+      <i class="flash-progress" aria-hidden="true" style={`transform: scaleX(${flashProgress})`}></i>
     </div>
   {/if}
 
@@ -475,9 +553,9 @@
       </section>
 
       <section class="telemetry-grid" aria-label="Telemetria do sistema">
-        <div class="telemetry-card"><span>Registros ativos</span><strong>{String(contacts.length).padStart(2, '0')}</strong><i style={`--level: ${Math.min(100, 18 + contacts.length * 12)}%`}></i></div>
-        <div class="telemetry-card"><span>Integridade do núcleo</span><strong>99.8<small>%</small></strong><i style="--level: 92%"></i></div>
-        <div class="telemetry-card"><span>Canal de dados</span><strong>12<small>ms</small></strong><i style="--level: 74%"></i></div>
+        <div class="telemetry-card" style="--card-index: 0"><span>Registros ativos</span><strong>{String(contacts.length).padStart(2, '0')}</strong><i style={`--level: ${Math.min(100, 18 + contacts.length * 12)}%`}></i></div>
+        <div class="telemetry-card" style="--card-index: 1"><span>Integridade do núcleo</span><strong>99.8<small>%</small></strong><i style="--level: 92%"></i></div>
+        <div class="telemetry-card" style="--card-index: 2"><span>Canal de dados</span><strong>12<small>ms</small></strong><i style="--level: 74%"></i></div>
       </section>
 
       <section class="panel">
@@ -498,7 +576,7 @@
             </div>
           {:else}
             {#each contacts as contact, index}
-              <a data-testid="contact-list-item" class="list-item" href={toHash(`/contacts/${contact.id}`)}>
+              <a data-testid="contact-list-item" class="list-item" style={`--item-index: ${index}`} href={toHash(`/contacts/${contact.id}`)}>
                 <span class="list-index">{String(index + 1).padStart(2, '0')}</span>
                 <span class="list-copy"><strong>{contact.name}</strong><span>{contact.document}</span></span>
                 <span class="list-status"><i></i>ativo</span>
@@ -527,77 +605,89 @@
           {/each}
         </div>
 
-        {#if wizardStep === 'basic'}
-          <div data-testid="contact-wizard-step-basic">
-            <h2>Etapa 1: Dados do contato</h2>
-            <label>
-              Nome do contato
-              <input data-testid="contact-name" bind:value={wizard.name} />
-            </label>
-            <label>
-              Documento
-              <input data-testid="contact-document" bind:value={wizard.document} />
-            </label>
-          </div>
-        {:else if wizardStep === 'address'}
-          <div data-testid="contact-wizard-step-address">
-            <h2>Etapa 2: Endereço</h2>
-            <label>
-              CEP
-              <input
-                data-testid="contact-cep"
-                value={wizard.address.cep}
-                on:input={handleWizardCepInput}
-              />
-            </label>
-            <label>Rua <input data-testid="contact-street" bind:value={wizard.address.street} /></label>
-            <label>Número <input data-testid="contact-number" bind:value={wizard.address.number} /></label>
-            <label>Cidade <input data-testid="contact-city" bind:value={wizard.address.city} /></label>
-            <label>
-              Estado
-              <Select.Root type="single" bind:value={wizard.address.state} items={stateItems}>
-                <Select.Trigger data-testid="contact-state" class="select-trigger">
-                  <Select.Value placeholder="Selecione o estado" />
-                </Select.Trigger>
-                <Select.Portal>
-                  <Select.Content class="select-content" sideOffset={8}>
-                    <Select.Viewport class="select-viewport">
-                      {#each states as state}
-                        <Select.Item value={state} label={state} class="select-item">
-                          {state}
-                        </Select.Item>
-                      {/each}
-                    </Select.Viewport>
-                  </Select.Content>
-                </Select.Portal>
-              </Select.Root>
-            </label>
-          </div>
-        {:else if wizardStep === 'owner'}
-          <div data-testid="contact-wizard-step-owner">
-            <h2>Etapa 3: Responsável</h2>
-            <label>
-              Nome do responsável
-              <input data-testid="contact-owner-name" bind:value={wizard.owner.name} />
-            </label>
-            <label>
-              Email do responsável
-              <input data-testid="contact-owner-email" type="email" bind:value={wizard.owner.email} />
-            </label>
-          </div>
-        {:else}
-          <div data-testid="contact-wizard-step-review" class="review-card">
-            <h2>Etapa 4: Revisão</h2>
-            <p data-testid="review-contact-name"><strong>Nome:</strong> {wizard.name}</p>
-            <p data-testid="review-contact-document"><strong>Documento:</strong> {wizard.document}</p>
-            <p data-testid="review-contact-address">
-              <strong>Endereço:</strong> {wizard.address.street}, {wizard.address.number} - {wizard.address.city}/{wizard.address.state} - {wizard.address.cep}
-            </p>
-            <p data-testid="review-contact-owner">
-              <strong>Responsável:</strong> {wizard.owner.name} ({wizard.owner.email})
-            </p>
-          </div>
-        {/if}
+        <div class="wizard-stage">
+          {#key wizardStep}
+            <div
+              class:wizard-stage-backward={wizardDirection < 0}
+              class:wizard-stage-forward={wizardDirection > 0}
+              class="wizard-stage-frame"
+              in:fly={{ x: wizardDirection > 0 ? 10 : -10, y: 6, duration: 240, opacity: 0.2 }}
+              out:fly={{ x: wizardDirection > 0 ? -8 : 8, y: -4, duration: 180, opacity: 0.15 }}
+            >
+              {#if wizardStep === 'basic'}
+                <div data-testid="contact-wizard-step-basic">
+                  <h2>Etapa 1: Dados do contato</h2>
+                  <label>
+                    Nome do contato
+                    <input data-testid="contact-name" bind:value={wizard.name} />
+                  </label>
+                  <label>
+                    Documento
+                    <input data-testid="contact-document" bind:value={wizard.document} />
+                  </label>
+                </div>
+              {:else if wizardStep === 'address'}
+                <div data-testid="contact-wizard-step-address">
+                  <h2>Etapa 2: Endereço</h2>
+                  <label>
+                    CEP
+                    <input
+                      data-testid="contact-cep"
+                      value={wizard.address.cep}
+                      on:input={handleWizardCepInput}
+                    />
+                  </label>
+                  <label>Rua <input data-testid="contact-street" bind:value={wizard.address.street} /></label>
+                  <label>Número <input data-testid="contact-number" bind:value={wizard.address.number} /></label>
+                  <label>Cidade <input data-testid="contact-city" bind:value={wizard.address.city} /></label>
+                  <label>
+                    Estado
+                    <Select.Root type="single" bind:value={wizard.address.state} items={stateItems}>
+                      <Select.Trigger data-testid="contact-state" class="select-trigger">
+                        <Select.Value placeholder="Selecione o estado" />
+                      </Select.Trigger>
+                      <Select.Portal>
+                        <Select.Content class="select-content" sideOffset={8}>
+                          <Select.Viewport class="select-viewport">
+                            {#each states as state}
+                              <Select.Item value={state} label={state} class="select-item">
+                                {state}
+                              </Select.Item>
+                            {/each}
+                          </Select.Viewport>
+                        </Select.Content>
+                      </Select.Portal>
+                    </Select.Root>
+                  </label>
+                </div>
+              {:else if wizardStep === 'owner'}
+                <div data-testid="contact-wizard-step-owner">
+                  <h2>Etapa 3: Responsável</h2>
+                  <label>
+                    Nome do responsável
+                    <input data-testid="contact-owner-name" bind:value={wizard.owner.name} />
+                  </label>
+                  <label>
+                    Email do responsável
+                    <input data-testid="contact-owner-email" type="email" bind:value={wizard.owner.email} />
+                  </label>
+                </div>
+              {:else}
+                <div data-testid="contact-wizard-step-review" class="review-card">
+                  <h2>Etapa 4: Revisão</h2>
+                  <p data-testid="review-contact-name"><strong>Nome:</strong> {wizard.name}</p>
+                  <p data-testid="review-contact-document"><strong>Documento:</strong> {wizard.document}</p>
+                  <p data-testid="review-contact-address">
+                    <strong>Endereço:</strong> {wizard.address.street}, {wizard.address.number} - {wizard.address.city}/{wizard.address.state} - {wizard.address.cep}
+                  </p>
+                  <p data-testid="review-contact-owner">
+                    <strong>Responsável:</strong> {wizard.owner.name} ({wizard.owner.email})
+                  </p>
+                </div>
+              {/if}
+            </div>
+          {/key}
+        </div>
 
         <p class="error" data-testid="wizard-error">{wizardError}</p>
         <div class="actions">
@@ -1212,6 +1302,7 @@
     transform-origin: center bottom;
     mask-image: linear-gradient(180deg, transparent 2%, black 48%, transparent 96%);
     opacity: 0.62;
+    animation: grid-drift 28s linear infinite;
   }
 
   .scene-nebula-a {
@@ -1220,9 +1311,10 @@
       radial-gradient(ellipse at 82% 12%, rgba(153, 181, 38, 0.08), transparent 22%),
       radial-gradient(ellipse at 56% 62%, rgba(20, 102, 109, 0.1), transparent 34%);
     filter: blur(28px);
+    animation: nebula-breathe-a 16s ease-in-out infinite alternate;
   }
 
-  .scene-nebula-b { filter: blur(54px); }
+  .scene-nebula-b { filter: blur(54px); animation: nebula-breathe-b 20s ease-in-out infinite alternate; }
 
   .scene-stars-far {
     background-image:
@@ -1231,6 +1323,7 @@
     background-position: 0 0, 39px 61px;
     background-size: 127px 113px, 173px 151px;
     opacity: 0.46;
+    animation: stars-drift-far 44s linear infinite;
   }
 
   .scene-stars-near {
@@ -1241,6 +1334,7 @@
       radial-gradient(circle at 25% 81%, rgba(217, 255, 87, 0.5) 0 1px, transparent 2px),
       radial-gradient(circle at 62% 44%, rgba(100, 242, 223, 0.45) 0 1px, transparent 2px);
     filter: drop-shadow(0 0 4px rgba(100, 242, 223, 0.7));
+    animation: stars-drift-near 26s linear infinite;
   }
 
   .scene-vignette {
@@ -1263,6 +1357,7 @@
     background: none;
     box-shadow: none;
     backdrop-filter: none;
+    animation: chrome-rise 420ms ease-out both;
   }
 
   .brand-mark {
@@ -1297,6 +1392,18 @@
     align-items: center;
     gap: 8px;
     clip-path: polygon(0 0, calc(100% - 8px) 0, 100% 8px, 100% 100%, 8px 100%, 0 calc(100% - 8px));
+    position: relative;
+    overflow: hidden;
+  }
+
+  .topnav a::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background: linear-gradient(110deg, transparent 18%, rgba(100, 242, 223, 0.22) 50%, transparent 82%);
+    transform: translateX(-130%);
+    opacity: 0;
+    pointer-events: none;
   }
 
   .topnav a.active {
@@ -1304,6 +1411,14 @@
     background: rgba(217, 255, 87, 0.06);
     border-color: rgba(217, 255, 87, 0.46);
     box-shadow: inset 0 -2px rgba(217, 255, 87, 0.62), 0 0 20px rgba(217, 255, 87, 0.08);
+    animation: nav-active-sweep 2.6s ease-in-out infinite;
+  }
+
+  .topnav a.active::after,
+  .topnav a:hover::after,
+  .topnav a:focus-visible::after {
+    opacity: 1;
+    animation: sweep-x 880ms ease-out both;
   }
 
   .nav-icon { width: 17px; height: 17px; display: inline-flex; }
@@ -1345,6 +1460,7 @@
     font-family: 'Rajdhani', sans-serif;
     font-size: 0.68rem;
     letter-spacing: 0.22em;
+    animation: chrome-rise 520ms ease-out both;
   }
 
   .system-rail i { height: 1px; background: linear-gradient(90deg, transparent, rgba(100, 242, 223, 0.28), transparent); }
@@ -1359,6 +1475,7 @@
     font-size: 0.62rem;
     letter-spacing: 0.28em;
     writing-mode: vertical-rl;
+    animation: telemetry-fade 2.8s ease-in-out infinite alternate;
   }
 
   .edge-telemetry::before,
@@ -1384,6 +1501,7 @@
     border-color: rgba(111, 255, 237, 0.24);
     padding: clamp(26px, 4vw, 46px);
     box-shadow: var(--shadow), inset 0 0 70px rgba(0, 0, 0, 0.18);
+    animation: panel-in 440ms cubic-bezier(0.2, 0.9, 0.16, 1) both;
   }
 
   .panel::before {
@@ -1434,17 +1552,21 @@
     border: 1px solid rgba(111, 255, 237, 0.16);
     background: linear-gradient(145deg, rgba(7, 25, 29, 0.82), rgba(3, 13, 16, 0.76));
     clip-path: polygon(0 0, calc(100% - 11px) 0, 100% 11px, 100% 100%, 11px 100%, 0 calc(100% - 11px));
+    animation: panel-in 360ms cubic-bezier(0.2, 0.9, 0.16, 1) both;
+    animation-delay: calc(110ms + (var(--card-index, 0) * 70ms));
   }
 
   .telemetry-card span { display: block; color: var(--text-2); font-family: 'Rajdhani', sans-serif; font-size: 0.72rem; letter-spacing: 0.16em; text-transform: uppercase; }
   .telemetry-card strong { display: block; margin-top: 4px; color: var(--cyan); font-family: 'Rajdhani', sans-serif; font-size: 2.1rem; font-weight: 500; line-height: 1; }
   .telemetry-card small { margin-left: 3px; color: var(--text-2); font-size: 0.78rem; }
-  .telemetry-card > i { position: absolute; right: 0; bottom: 0; left: 0; height: 2px; background: linear-gradient(90deg, var(--cyan) var(--level), rgba(100, 242, 223, 0.08) var(--level)); box-shadow: 0 0 9px rgba(100, 242, 223, 0.28); }
+  .telemetry-card > i { position: absolute; right: 0; bottom: 0; left: 0; height: 2px; transform-origin: left; background: linear-gradient(90deg, var(--cyan) var(--level), rgba(100, 242, 223, 0.08) var(--level)); box-shadow: 0 0 9px rgba(100, 242, 223, 0.28); animation: telemetry-fill 780ms cubic-bezier(0.2, 0.9, 0.16, 1) both; animation-delay: calc(220ms + (var(--card-index, 0) * 70ms)); }
 
   .list-item {
     grid-template-columns: 42px 1fr auto 30px;
     align-items: center;
     gap: 16px;
+    animation: list-item-in 320ms ease-out both;
+    animation-delay: calc(140ms + (min(var(--item-index, 0), 8) * 48ms));
   }
 
   .list-item:hover { transform: translateX(3px); }
@@ -1462,7 +1584,7 @@
   .empty-radar::before, .empty-radar::after { content: ''; position: absolute; background: rgba(100, 242, 223, 0.2); }
   .empty-radar::before { width: 1px; inset-block: 7px; left: 50%; }
   .empty-radar::after { height: 1px; inset-inline: 7px; top: 50%; }
-  .empty-radar i { position: absolute; inset: 13px; border: 1px solid rgba(217, 255, 87, 0.28); border-radius: 50%; }
+  .empty-radar i { position: absolute; inset: 13px; border: 1px solid rgba(217, 255, 87, 0.28); border-radius: 50%; animation: radar-pulse 2.8s ease-out infinite; }
 
   form > label,
   [data-testid='contact-wizard-step-basic'] label,
@@ -1484,6 +1606,12 @@
       linear-gradient(to bottom left, transparent 42%, var(--field-corner) 46% 54%, transparent 58%) top right / 10px 10px no-repeat,
       linear-gradient(to bottom left, transparent 42%, var(--field-corner) 46% 54%, transparent 58%) bottom left / 10px 10px no-repeat,
       linear-gradient(90deg, rgba(3, 14, 17, 0.94), rgba(7, 25, 28, 0.84));
+    transition:
+      border-color 180ms ease,
+      box-shadow 180ms ease,
+      transform 180ms ease,
+      background-size 180ms ease,
+      background-position 180ms ease;
   }
 
   input { min-height: 22px; }
@@ -1492,20 +1620,34 @@
   :global(.select-trigger:hover) {
     --field-corner: rgba(100, 242, 223, 0.7);
     border-color: rgba(100, 242, 223, 0.38);
+    transform: translateY(-1px);
   }
 
   input:focus,
   :global(.select-trigger:focus-visible),
   :global(.select-trigger[data-state='open']) {
     --field-corner: var(--cyan);
+    transform: translateY(-1px);
   }
 
   button {
     --button-corner: rgba(8, 82, 78, 0.9);
+    position: relative;
+    overflow: hidden;
     background:
       linear-gradient(to bottom left, transparent 42%, var(--button-corner) 46% 54%, transparent 58%) top right / 12px 12px no-repeat,
       linear-gradient(to bottom left, transparent 42%, var(--button-corner) 46% 54%, transparent 58%) bottom left / 12px 12px no-repeat,
       linear-gradient(135deg, rgba(217, 255, 87, 0.96), rgba(165, 255, 130, 0.92));
+  }
+
+  button::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background: linear-gradient(112deg, transparent 22%, rgba(255, 255, 255, 0.28) 50%, transparent 78%);
+    transform: translateX(-135%);
+    opacity: 0;
+    pointer-events: none;
   }
 
   button.button-ghost {
@@ -1519,6 +1661,16 @@
   button:hover,
   button:focus-visible {
     --button-corner: var(--cyan);
+  }
+
+  button:hover::after,
+  button:focus-visible::after {
+    opacity: 1;
+    animation: sweep-x 760ms ease-out both;
+  }
+
+  button:active {
+    transform: translateY(1px) scale(0.985);
   }
 
   .status-pill {
@@ -1551,6 +1703,17 @@
       linear-gradient(to bottom left, transparent 42%, var(--step-corner) 46% 54%, transparent 58%) top right / 8px 8px no-repeat,
       linear-gradient(to bottom left, transparent 42%, var(--step-corner) 46% 54%, transparent 58%) bottom left / 8px 8px no-repeat,
       linear-gradient(135deg, rgba(100, 242, 223, 0.96), rgba(217, 255, 87, 0.9));
+    animation: active-step-pulse 2.8s ease-in-out infinite;
+  }
+
+  .wizard-stage {
+    position: relative;
+    min-height: 336px;
+    margin-bottom: 2px;
+  }
+
+  .wizard-stage-frame {
+    position: relative;
   }
 
   [data-testid='contact-wizard-page'] .panel {
@@ -1584,6 +1747,10 @@
     animation: toast-in 260ms ease-out both;
   }
 
+  .flash.flash-exiting {
+    animation: toast-out 220ms ease-in both;
+  }
+
   .flash-signal {
     width: 28px;
     height: 28px;
@@ -1600,6 +1767,7 @@
     border-radius: 50%;
     background: var(--success);
     box-shadow: 0 0 10px var(--success);
+    animation: online-pulse 1.8s ease-in-out infinite;
   }
 
   .flash-copy {
@@ -1650,7 +1818,7 @@
     transform-origin: left;
     background: linear-gradient(90deg, var(--success), var(--cyan));
     box-shadow: 0 0 8px rgba(156, 255, 186, 0.42);
-    animation: toast-progress 4.2s linear both;
+    transition: transform 100ms linear;
   }
 
   @keyframes toast-in {
@@ -1658,9 +1826,9 @@
     to { opacity: 1; transform: translateY(0); }
   }
 
-  @keyframes toast-progress {
-    from { transform: scaleX(1); }
-    to { transform: scaleX(0); }
+  @keyframes toast-out {
+    from { opacity: 1; transform: translateY(0) scale(1); }
+    to { opacity: 0; transform: translateY(-8px) scale(0.985); }
   }
   button { font-weight: 600; }
   button:focus-visible, a:focus-visible, input:focus-visible, :global(.select-trigger:focus-visible) { outline: 1px solid var(--lime); outline-offset: 3px; }
@@ -1673,14 +1841,104 @@
     position: relative;
     background: linear-gradient(90deg, rgba(100, 242, 223, 0.85), rgba(100, 242, 223, 0.12) 62%, transparent);
     box-shadow: -10px 0 12px rgba(100, 242, 223, 0.2);
+    overflow: hidden;
   }
 
   .panel-rule::after { content: ''; position: absolute; right: 0; width: 5px; height: 5px; top: -2px; background: var(--lime); transform: rotate(45deg); box-shadow: 0 0 8px rgba(217, 255, 87, 0.55); }
+  .panel-rule::before { content: ''; position: absolute; inset: 0 auto 0 -18%; width: 18%; background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.52), transparent); animation: rule-scan 2.8s ease-in-out infinite; }
 
   .access-status { display: grid; grid-template-columns: auto 1fr auto; align-items: center; margin: 24px 0 10px; padding: 11px 14px; color: var(--text-2); border-left: 2px solid var(--cyan); background: linear-gradient(90deg, rgba(100, 242, 223, 0.1), transparent); font-family: 'Rajdhani', sans-serif; font-size: 0.75rem; letter-spacing: 0.12em; text-transform: uppercase; }
   .access-status b { color: var(--cyan); font-weight: 500; }
 
   .step-strip span { position: relative; flex: 1; text-align: center; }
+
+  .status-pill > i.online,
+  .list-status i,
+  .access-status i {
+    animation: online-pulse 2s ease-in-out infinite;
+  }
+
+  @keyframes panel-in {
+    from { opacity: 0; transform: translateY(12px) scale(0.992); }
+    to { opacity: 1; transform: translateY(0) scale(1); }
+  }
+
+  @keyframes chrome-rise {
+    from { opacity: 0; transform: translateY(-8px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+
+  @keyframes list-item-in {
+    from { opacity: 0; transform: translateX(-8px); }
+    to { opacity: 1; transform: translateX(0); }
+  }
+
+  @keyframes telemetry-fill {
+    from { transform: scaleX(0); opacity: 0.35; }
+    to { transform: scaleX(1); opacity: 1; }
+  }
+
+  @keyframes sweep-x {
+    from { transform: translateX(-135%); }
+    to { transform: translateX(135%); }
+  }
+
+  @keyframes rule-scan {
+    0%, 18% { transform: translateX(0); opacity: 0; }
+    30% { opacity: 0.9; }
+    62%, 100% { transform: translateX(660%); opacity: 0; }
+  }
+
+  @keyframes active-step-pulse {
+    0%, 100% { box-shadow: 0 0 0 rgba(100, 242, 223, 0); }
+    50% { box-shadow: 0 0 18px rgba(100, 242, 223, 0.14); }
+  }
+
+  @keyframes online-pulse {
+    0%, 100% { opacity: 0.9; transform: scale(1); }
+    50% { opacity: 1; transform: scale(1.18); }
+  }
+
+  @keyframes radar-pulse {
+    0% { opacity: 0.18; transform: scale(0.92); }
+    65% { opacity: 0.58; transform: scale(1.08); }
+    100% { opacity: 0; transform: scale(1.24); }
+  }
+
+  @keyframes telemetry-fade {
+    from { opacity: 0.5; }
+    to { opacity: 0.95; }
+  }
+
+  @keyframes nav-active-sweep {
+    0%, 100% { box-shadow: inset 0 -2px rgba(217, 255, 87, 0.62), 0 0 20px rgba(217, 255, 87, 0.08); }
+    50% { box-shadow: inset 0 -2px rgba(217, 255, 87, 0.82), 0 0 26px rgba(217, 255, 87, 0.12); }
+  }
+
+  @keyframes grid-drift {
+    from { transform: perspective(520px) rotateX(62deg) scale(1.35) translate3d(0, 30%, 0); }
+    to { transform: perspective(520px) rotateX(62deg) scale(1.35) translate3d(-10px, 28%, 0); }
+  }
+
+  @keyframes nebula-breathe-a {
+    from { opacity: 0.88; transform: scale(1) translate3d(0, 0, 0); }
+    to { opacity: 1; transform: scale(1.05) translate3d(8px, -6px, 0); }
+  }
+
+  @keyframes nebula-breathe-b {
+    from { opacity: 0.72; transform: scale(1) translate3d(0, 0, 0); }
+    to { opacity: 0.94; transform: scale(1.08) translate3d(-10px, 8px, 0); }
+  }
+
+  @keyframes stars-drift-far {
+    from { transform: translate3d(0, 0, 0); }
+    to { transform: translate3d(-18px, 12px, 0); }
+  }
+
+  @keyframes stars-drift-near {
+    from { transform: translate3d(0, 0, 0); }
+    to { transform: translate3d(14px, -10px, 0); }
+  }
 
   @media (max-width: 980px) {
     .topbar {
@@ -1796,6 +2054,8 @@
     *::after {
       scroll-behavior: auto !important;
       transition-duration: 0.01ms !important;
+      animation-duration: 0.01ms !important;
+      animation-iteration-count: 1 !important;
     }
   }
 </style>
