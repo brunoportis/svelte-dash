@@ -1449,6 +1449,21 @@
     pointer-events: none;
   }
 
+  .record-frame::after {
+    content: '';
+    position: absolute;
+    inset: 7px;
+    pointer-events: none;
+    background:
+      linear-gradient(var(--lime), var(--lime)) 0 0 / 22px 1px no-repeat,
+      linear-gradient(var(--lime), var(--lime)) 0 0 / 1px 22px no-repeat,
+      linear-gradient(var(--cyan), var(--cyan)) 100% 100% / 22px 1px no-repeat,
+      linear-gradient(var(--cyan), var(--cyan)) 100% 100% / 1px 22px no-repeat;
+    opacity: 0.62;
+    animation: frame-trace 860ms cubic-bezier(0.2, 0.9, 0.16, 1) both;
+    animation-delay: 150ms;
+  }
+
   .record-panel:hover .record-frame {
     border-color: rgba(100, 242, 223, 0.24);
     box-shadow:
@@ -1516,6 +1531,7 @@
   }
 
   .detail-cell {
+    position: relative;
     min-width: 0;
     padding: 16px 16px 15px;
     border: 1px solid rgba(100, 242, 223, 0.14);
@@ -1527,6 +1543,21 @@
     clip-path: polygon(0 0, calc(100% - 10px) 0, 100% 10px, 100% 100%, 10px 100%, 0 calc(100% - 10px));
     box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.02);
     transition: transform 180ms ease, border-color 180ms ease, box-shadow 180ms ease, background 180ms ease;
+  }
+
+  .detail-cell::after {
+    content: '';
+    position: absolute;
+    inset: 7px;
+    pointer-events: none;
+    background:
+      linear-gradient(rgba(100, 242, 223, 0.84), rgba(100, 242, 223, 0.84)) 100% 0 / 12px 1px no-repeat,
+      linear-gradient(rgba(100, 242, 223, 0.84), rgba(100, 242, 223, 0.84)) 100% 0 / 1px 12px no-repeat,
+      linear-gradient(rgba(100, 242, 223, 0.62), rgba(100, 242, 223, 0.62)) 0 100% / 12px 1px no-repeat,
+      linear-gradient(rgba(100, 242, 223, 0.62), rgba(100, 242, 223, 0.62)) 0 100% / 1px 12px no-repeat;
+    opacity: 0.74;
+    animation: chamfer-trace 720ms cubic-bezier(0.2, 0.9, 0.16, 1) both;
+    animation-delay: 220ms;
   }
 
   .detail-cell:hover {
@@ -1815,6 +1846,8 @@
       linear-gradient(var(--cyan), var(--cyan)) 100% 100% / 1px 24px no-repeat;
     opacity: 0.5;
     z-index: 2;
+    animation: frame-trace 920ms cubic-bezier(0.2, 0.9, 0.16, 1) both;
+    animation-delay: 170ms;
   }
 
   .narrow { max-width: 720px; margin-inline: auto; }
@@ -1858,6 +1891,24 @@
     animation-delay: calc(110ms + (var(--card-index, 0) * 70ms));
   }
 
+  .telemetry-card::before,
+  .signal-status::before,
+  .signal-item::before,
+  .list-item::before {
+    content: '';
+    position: absolute;
+    inset: 7px;
+    pointer-events: none;
+    background:
+      linear-gradient(rgba(100, 242, 223, 0.82), rgba(100, 242, 223, 0.82)) 100% 0 / 12px 1px no-repeat,
+      linear-gradient(rgba(100, 242, 223, 0.82), rgba(100, 242, 223, 0.82)) 100% 0 / 1px 12px no-repeat,
+      linear-gradient(rgba(100, 242, 223, 0.58), rgba(100, 242, 223, 0.58)) 0 100% / 12px 1px no-repeat,
+      linear-gradient(rgba(100, 242, 223, 0.58), rgba(100, 242, 223, 0.58)) 0 100% / 1px 12px no-repeat;
+    opacity: 0.74;
+    animation: chamfer-trace 700ms cubic-bezier(0.2, 0.9, 0.16, 1) both;
+    animation-delay: calc(190ms + (var(--card-index, var(--item-index, 0)) * 65ms));
+  }
+
   .telemetry-card span { display: block; color: var(--text-2); font-family: 'Rajdhani', sans-serif; font-size: 0.72rem; letter-spacing: 0.16em; text-transform: uppercase; }
   .telemetry-card strong { display: block; margin-top: 4px; color: var(--cyan); font-family: 'Rajdhani', sans-serif; font-size: 2.1rem; font-weight: 500; line-height: 1; }
   .telemetry-card small { margin-left: 3px; color: var(--text-2); font-size: 0.78rem; }
@@ -1873,6 +1924,7 @@
   }
 
   .signal-status {
+    position: relative;
     display: grid;
     gap: 4px;
     padding: 15px 16px;
@@ -1910,6 +1962,7 @@
   .signal-status-critical span { color: #ff8e79; }
 
   .signal-item {
+    position: relative;
     display: grid;
     grid-template-columns: minmax(0, 1fr) auto;
     gap: 12px;
@@ -1945,6 +1998,7 @@
   .signal-item-critical strong { color: #ff8e79; }
 
   .list-item {
+    position: relative;
     --row-corner: rgba(100, 242, 223, 0.48);
     background:
       linear-gradient(to bottom left, transparent 42%, var(--row-corner) 46% 54%, transparent 58%) top right / 12px 12px no-repeat,
@@ -2266,6 +2320,76 @@
   @keyframes panel-in {
     from { opacity: 0; transform: translateY(12px) scale(0.992); }
     to { opacity: 1; transform: translateY(0) scale(1); }
+  }
+
+  @keyframes frame-trace {
+    0% {
+      opacity: 0;
+      background-size:
+        0 1px,
+        1px 0,
+        0 1px,
+        1px 0;
+    }
+    35% {
+      opacity: 0.9;
+      background-size:
+        24px 1px,
+        1px 0,
+        0 1px,
+        1px 0;
+    }
+    68% {
+      opacity: 0.8;
+      background-size:
+        24px 1px,
+        1px 24px,
+        24px 1px,
+        1px 0;
+    }
+    100% {
+      opacity: 0.5;
+      background-size:
+        24px 1px,
+        1px 24px,
+        24px 1px,
+        1px 24px;
+    }
+  }
+
+  @keyframes chamfer-trace {
+    0% {
+      opacity: 0;
+      background-size:
+        0 1px,
+        1px 0,
+        0 1px,
+        1px 0;
+    }
+    32% {
+      opacity: 0.88;
+      background-size:
+        12px 1px,
+        1px 0,
+        0 1px,
+        1px 0;
+    }
+    66% {
+      opacity: 0.82;
+      background-size:
+        12px 1px,
+        1px 12px,
+        12px 1px,
+        1px 0;
+    }
+    100% {
+      opacity: 0.74;
+      background-size:
+        12px 1px,
+        1px 12px,
+        12px 1px,
+        1px 12px;
+    }
   }
 
   @keyframes chrome-rise {
