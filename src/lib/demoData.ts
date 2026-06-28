@@ -1,6 +1,6 @@
-import type { DemoStore, WizardState } from './types';
+import type { DemoContact, ContactWizardState } from './types';
 
-export const emptyWizardState = (): WizardState => ({
+export const emptyWizardState = (): ContactWizardState => ({
   name: '',
   document: '',
   address: {
@@ -16,15 +16,15 @@ export const emptyWizardState = (): WizardState => ({
   },
 });
 
-export const seedStore: DemoStore = {
-  id: 'store-1',
-  name: 'Loja Seed',
+export const seedContact: DemoContact = {
+  id: 'contact-1',
+  name: 'Contato Seed',
   document: '12345678000199',
   address: {
-    cep: '05590100',
-    street: 'Rua Demo',
+    cep: '11111111',
+    street: 'Rua Fictícia',
     number: '12',
-    city: 'São Paulo',
+    city: 'Cidade Demo',
     state: 'SP',
   },
   owner: {
