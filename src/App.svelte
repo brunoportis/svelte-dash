@@ -1495,7 +1495,10 @@
 
   .panel {
     isolation: isolate;
+    --panel-corner: rgba(100, 242, 223, 0.58);
     background:
+      linear-gradient(to bottom left, transparent 43%, var(--panel-corner) 47% 53%, transparent 57%) top right / 18px 18px no-repeat,
+      linear-gradient(to bottom left, transparent 43%, var(--panel-corner) 47% 53%, transparent 57%) bottom left / 18px 18px no-repeat,
       radial-gradient(ellipse at 74% 0%, rgba(25, 120, 113, 0.1), transparent 34%),
       linear-gradient(135deg, rgba(7, 24, 28, 0.92), rgba(3, 13, 16, 0.84));
     border-color: rgba(111, 255, 237, 0.24);
@@ -1562,6 +1565,11 @@
   .telemetry-card > i { position: absolute; right: 0; bottom: 0; left: 0; height: 2px; transform-origin: left; background: linear-gradient(90deg, var(--cyan) var(--level), rgba(100, 242, 223, 0.08) var(--level)); box-shadow: 0 0 9px rgba(100, 242, 223, 0.28); animation: telemetry-fill 780ms cubic-bezier(0.2, 0.9, 0.16, 1) both; animation-delay: calc(220ms + (var(--card-index, 0) * 70ms)); }
 
   .list-item {
+    --row-corner: rgba(100, 242, 223, 0.48);
+    background:
+      linear-gradient(to bottom left, transparent 42%, var(--row-corner) 46% 54%, transparent 58%) top right / 12px 12px no-repeat,
+      linear-gradient(to bottom left, transparent 42%, var(--row-corner) 46% 54%, transparent 58%) bottom left / 12px 12px no-repeat,
+      linear-gradient(180deg, rgba(10, 31, 36, 0.8), rgba(7, 20, 24, 0.76));
     grid-template-columns: 42px 1fr auto 30px;
     align-items: center;
     gap: 16px;
@@ -1569,7 +1577,10 @@
     animation-delay: calc(140ms + (min(var(--item-index, 0), 8) * 48ms));
   }
 
-  .list-item:hover { transform: translateX(3px); }
+  .list-item:hover {
+    --row-corner: rgba(100, 242, 223, 0.78);
+    transform: translateX(3px);
+  }
   .list-index { color: rgba(100, 242, 223, 0.48); font-family: 'Rajdhani', sans-serif; font-size: 1.2rem; border-right: 1px solid rgba(100, 242, 223, 0.14); }
   .list-copy { display: grid; gap: 2px; }
   .list-copy strong { font-family: 'Rajdhani', sans-serif; font-size: 1.05rem; font-weight: 500; letter-spacing: 0.08em; text-transform: uppercase; }
@@ -1717,6 +1728,7 @@
   }
 
   [data-testid='contact-wizard-page'] .panel {
+    --panel-corner: rgba(100, 242, 223, 0.7);
     background:
       linear-gradient(to bottom left, transparent 43%, rgba(100, 242, 223, 0.62) 47% 53%, transparent 57%) top right / 18px 18px no-repeat,
       linear-gradient(to bottom left, transparent 43%, rgba(100, 242, 223, 0.62) 47% 53%, transparent 57%) bottom left / 18px 18px no-repeat,
