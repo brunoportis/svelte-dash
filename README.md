@@ -35,3 +35,27 @@ Important UI elements expose `data-testid` attributes for automation.
 ```yaml
 base_url: http://localhost:5173/
 ```
+
+## Deploy to GitHub Pages
+
+This app can be deployed as a static Vite app to GitHub Pages.
+
+In the repository settings, go to:
+
+Settings -> Pages -> Build and deployment -> Source
+
+Select:
+
+GitHub Actions
+
+Then push to `main`.
+
+The app will be available at:
+
+https://<user>.github.io/<repo>/
+
+Because the app uses hash routing, routes look like:
+
+https://<user>.github.io/<repo>/#/login
+
+All demo state persists in browser `localStorage`, so it remains available after navigation and reloads on GitHub Pages.
