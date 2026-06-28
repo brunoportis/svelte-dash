@@ -1,0 +1,29 @@
+name: create store with valid data
+
+given:
+  - kind: behavior
+    name: fazer login
+
+when:
+  - kind: flow
+    name: cadastrar loja
+    with:
+      store_name: Loja Demo
+      document: "12345678000199"
+      cep: "05590100"
+      street: Rua Demo
+      number: "12"
+      city: São Paulo
+      state: SP
+      owner_name: Maria Demo
+      owner_email: maria@example.com
+
+then:
+  - claim: store was created successfully
+    checks:
+      - page_contains: Loja cadastrada com sucesso
+      - page_contains: Loja Demo
+    evidence:
+      - kind: screenshot
+        options:
+          name: store-created
