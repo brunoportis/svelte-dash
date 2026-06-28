@@ -1,4 +1,4 @@
-export type DemoStore = {
+export type DemoContact = {
   id: string;
   name: string;
   document: string;
@@ -20,7 +20,7 @@ export type Session = {
   email: string;
 };
 
-export type WizardState = {
+export type ContactWizardState = {
   name: string;
   document: string;
   address: {
@@ -39,7 +39,7 @@ export type WizardState = {
 export type Route =
   | { name: 'login' }
   | { name: 'dashboard' }
-  | { name: 'store-new' }
-  | { name: 'store-detail'; id: string }
-  | { name: 'store-edit-address'; id: string }
+  | { name: 'contact-new' }
+  | { name: 'contact-detail'; id: string }
+  | { name: 'contact-edit-address'; id: string }
   | { name: 'unknown' };

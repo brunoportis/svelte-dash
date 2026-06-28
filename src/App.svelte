@@ -1,27 +1,32 @@
 <script lang="ts">
   import { onDestroy, onMount } from 'svelte';
-  import { emptyWizardState, seedStore } from './lib/demoData';
+  import { Select } from 'bits-ui';
+  import { emptyWizardState, seedContact } from './lib/demoData';
   import { getRouteFromHash, toHash } from './lib/router';
   import {
     clearDemoData,
-    getStoreById,
-    nextStoreId,
-    readSession,
+    clearSession,
+    getContactById,
+    nextContactId,
+    readContacts,
     readFlash,
-    readStores,
+    readSession,
     setFlash,
-    upsertStore,
+    upsertContact,
+    writeContacts,
     writeSession,
-    writeStores,
   } from './lib/storage';
-  import type { DemoStore, Route } from './lib/types';
+  import type { DemoContact, Route } from './lib/types';
 
   const steps = ['basic', 'address', 'owner', 'review'] as const;
+  const states = ['AC', 'AL', 'AP', 'AM', 'BA', 'CE', 'DF', 'ES', 'GO', 'MA', 'MT', 'MS', 'MG', 'PA', 'PB', 'PR', 'PE', 'PI', 'RJ', 'RN', 'RS', 'RO', 'RR', 'SC', 'SP', 'SE', 'TO'] as const;
+  const stateItems = states.map((state) => ({ value: state, label: state }));
   type Step = (typeof steps)[number];
 
   let route: Route = { name: 'unknown' };
   let loggedIn = false;
-  let stores: DemoStore[] = [];
+  let sessionEmail = '';
+  let contacts: DemoContact[] = [];
   let flashMessage = '';
   let wizardStep: Step = 'basic';
   let wizard = emptyWizardState();
@@ -32,25 +37,89 @@
     city: '',
     state: '',
   };
-  let currentStore: DemoStore | undefined;
+  let currentContact: DemoContact | undefined;
   let loginError = '';
   let wizardError = '';
+  let editAddressError = '';
+  let initialized = false;
+
+  function onlyDigits(value: string): string {
+    return value.replace(/\D/g, '').slice(0, 8);
+  }
+
+  function formatCep(value: string): string {
+    const digits = onlyDigits(value);
+    if (digits.length <= 5) return digits;
+    return `${digits.slice(0, 5)}-${digits.slice(5)}`;
+  }
+
+  function autoFillFromCep(value: string) {
+    const digits = onlyDigits(value);
+    if (!digits) {
+      return {
+        cep: '',
+        street: '',
+        number: '',
+        city: '',
+        state: '',
+      };
+    }
+
+    const padded = digits.padEnd(8, '0');
+    const numeric = Number.parseInt(padded, 10);
+    const state = states[numeric % states.length];
+
+    return {
+      cep: formatCep(digits),
+      street: `Rua ${digits.slice(0, 4) || 'Demo'}`,
+      number: String((numeric % 9000) + 1),
+      city: `Cidade ${digits.slice(-3) || 'Demo'}`,
+      state,
+    };
+  }
+
+  function setWizardCep(value: string) {
+    wizard = {
+      ...wizard,
+      address: {
+        ...wizard.address,
+        ...autoFillFromCep(value),
+      },
+    };
+  }
+
+  function setEditCep(value: string) {
+    editAddress = {
+      ...editAddress,
+      ...autoFillFromCep(value),
+    };
+  }
+
+  function handleWizardCepInput(event: Event) {
+    setWizardCep((event.currentTarget as HTMLInputElement).value);
+  }
+
+  function handleEditCepInput(event: Event) {
+    setEditCep((event.currentTarget as HTMLInputElement).value);
+  }
 
   function syncState() {
     route = getRouteFromHash(window.location.hash);
     const session = readSession();
     loggedIn = Boolean(session);
-    stores = readStores();
+    sessionEmail = session?.email ?? '';
+    contacts = readContacts();
     flashMessage = readFlash();
-    currentStore = route.name === 'store-detail' || route.name === 'store-edit-address'
-      ? getStoreById(route.id)
+    currentContact = route.name === 'contact-detail' || route.name === 'contact-edit-address'
+      ? getContactById(route.id)
       : undefined;
 
-    if (route.name === 'store-edit-address' && currentStore) {
-      editAddress = { ...currentStore.address };
+    if (route.name === 'contact-edit-address' && currentContact) {
+      editAddress = { ...currentContact.address };
+      editAddressError = '';
     }
 
-    if (route.name !== 'store-new') {
+    if (route.name !== 'contact-new') {
       wizard = emptyWizardState();
       wizardStep = 'basic';
       wizardError = '';
@@ -92,20 +161,29 @@
     navigate('/dashboard');
   }
 
+  function logout() {
+    clearSession();
+    loggedIn = false;
+    sessionEmail = '';
+    navigate('/login');
+    syncState();
+  }
+
   function resetDemoData() {
     clearDemoData();
     loggedIn = false;
-    stores = [];
+    sessionEmail = '';
+    contacts = [];
     setFlash('Dados de demonstração resetados');
     navigate('/login');
     syncState();
   }
 
-  function seedDemoStore() {
-    const existing = readStores();
+  function seedDemoContact() {
+    const existing = readContacts();
     if (existing.length === 0) {
-      writeStores([seedStore]);
-      setFlash('Loja seed criada');
+      writeContacts([seedContact]);
+      setFlash('Contato seed criado');
     }
     syncState();
   }
@@ -114,22 +192,30 @@
     wizard = emptyWizardState();
     wizardStep = 'basic';
     wizardError = '';
-    navigate('/stores/new');
+    navigate('/contacts/new');
   }
 
   function nextStep() {
     wizardError = '';
-    if (wizardStep === 'basic' && (!wizard.name.trim() || !wizard.document.trim())) {
-      wizardError = 'Preencha os dados da loja';
-      return;
+    if (wizardStep === 'basic') {
+      if (!wizard.name.trim() || !wizard.document.trim()) {
+        wizardError = 'Preencha nome e documento';
+        return;
+      }
     }
-    if (wizardStep === 'address' && (!wizard.address.cep.trim() || !wizard.address.street.trim())) {
-      wizardError = 'Preencha o endereço';
-      return;
+
+    if (wizardStep === 'address') {
+      if (!wizard.address.cep.trim() || !wizard.address.street.trim() || !wizard.address.number.trim()) {
+        wizardError = 'Preencha CEP e endereço';
+        return;
+      }
     }
-    if (wizardStep === 'owner' && (!wizard.owner.name.trim() || !wizard.owner.email.trim())) {
-      wizardError = 'Preencha o responsável';
-      return;
+
+    if (wizardStep === 'owner') {
+      if (!wizard.owner.name.trim() || !wizard.owner.email.trim()) {
+        wizardError = 'Preencha nome e email do responsável';
+        return;
+      }
     }
 
     const index = steps.indexOf(wizardStep);
@@ -149,8 +235,21 @@
   }
 
   function finishWizard() {
-    const id = nextStoreId();
-    const store: DemoStore = {
+    if (!wizard.name.trim() || !wizard.document.trim()) {
+      wizardError = 'Preencha nome e documento';
+      return;
+    }
+    if (!wizard.address.cep.trim() || !wizard.address.street.trim() || !wizard.address.number.trim()) {
+      wizardError = 'Preencha CEP e endereço';
+      return;
+    }
+    if (!wizard.owner.name.trim() || !wizard.owner.email.trim()) {
+      wizardError = 'Preencha nome e email do responsável';
+      return;
+    }
+
+    const id = nextContactId();
+    const contact: DemoContact = {
       id,
       name: wizard.name,
       document: wizard.document,
@@ -159,27 +258,34 @@
       status: 'active',
     };
 
-    upsertStore(store);
-    setFlash('Loja cadastrada com sucesso');
-    navigate(`/stores/${id}`);
+    upsertContact(contact);
+    setFlash('Contato cadastrado com sucesso');
+    navigate(`/contacts/${id}`);
     syncState();
   }
 
   function saveAddress() {
-    if (!currentStore) return;
-    const updated: DemoStore = {
-      ...currentStore,
+    if (!currentContact) return;
+
+    if (!editAddress.cep.trim() || !editAddress.street.trim() || !editAddress.number.trim()) {
+      editAddressError = 'CEP, rua e número são obrigatórios';
+      return;
+    }
+
+    editAddressError = '';
+    const updated: DemoContact = {
+      ...currentContact,
       address: { ...editAddress },
     };
-    upsertStore(updated);
+    upsertContact(updated);
     setFlash('Endereço atualizado com sucesso');
-    navigate(`/stores/${currentStore.id}`);
+    navigate(`/contacts/${currentContact.id}`);
     syncState();
   }
 
   function cancelAddress() {
-    if (currentStore) {
-      navigate(`/stores/${currentStore.id}`);
+    if (currentContact) {
+      navigate(`/contacts/${currentContact.id}`);
     } else {
       navigate('/dashboard');
     }
@@ -191,6 +297,7 @@
     }
 
     syncState();
+    initialized = true;
     ensureAuth();
     window.addEventListener('hashchange', handleHashChange);
   });
@@ -199,11 +306,11 @@
     window.removeEventListener('hashchange', handleHashChange);
   });
 
-  $: if (route.name === 'unknown') {
+  $: if (initialized && route.name === 'unknown') {
     navigate('/login');
   }
 
-  $: if (!loggedIn && route.name !== 'login') {
+  $: if (initialized && !loggedIn && route.name !== 'login') {
     ensureAuth();
   }
 </script>
@@ -215,7 +322,7 @@
 {#if route.name === 'login'}
   <main class="shell" data-testid="login-page">
     <section class="panel narrow">
-      <h1>QAPlanner Demo App</h1>
+      <h1>dash-svelte</h1>
       <form on:submit={handleLoginSubmit}>
         <label>
           Email
@@ -235,144 +342,204 @@
     <section class="page-header">
       <div>
         <h1>Bem-vindo</h1>
-        <p>Lojas cadastradas: {stores.length}</p>
+        <p>Contatos cadastrados: {contacts.length}</p>
+        <p class="muted">Logado como: {sessionEmail}</p>
       </div>
       <div class="actions">
-        <button data-testid="start-store-wizard" on:click={startWizard}>Cadastrar loja</button>
-        <button data-testid="seed-demo-store" on:click={seedDemoStore}>Seed demo store</button>
+        <button data-testid="start-contact-wizard" on:click={startWizard}>Cadastrar contato</button>
+        <button data-testid="seed-demo-contact" on:click={seedDemoContact}>Seed contato demo</button>
         <button data-testid="reset-demo-data" on:click={resetDemoData}>Reset demo data</button>
+        <button data-testid="logout" on:click={logout}>Sair</button>
       </div>
     </section>
 
     <section class="panel">
-      <h2>Lista de lojas</h2>
-      <div data-testid="store-list" class="list">
-        {#if stores.length === 0}
-          <p class="muted">Nenhuma loja cadastrada.</p>
+      <h2>Lista de contatos</h2>
+      <div data-testid="contact-list" class="list">
+        {#if contacts.length === 0}
+          <p class="muted">Nenhum contato cadastrado.</p>
         {:else}
-          {#each stores as store}
-            <a data-testid="store-list-item" class="list-item" href={toHash(`/stores/${store.id}`)}>
-              <strong>{store.name}</strong>
-              <span>{store.document}</span>
+          {#each contacts as contact}
+            <a data-testid="contact-list-item" class="list-item" href={toHash(`/contacts/${contact.id}`)}>
+              <strong>{contact.name}</strong>
+              <span>{contact.document}</span>
             </a>
           {/each}
         {/if}
       </div>
     </section>
   </main>
-{:else if route.name === 'store-new'}
-  <main class="shell" data-testid="wizard-page">
+{:else if route.name === 'contact-new'}
+  <main class="shell" data-testid="contact-wizard-page">
     <section class="panel narrow">
-      <h1>Cadastrar loja</h1>
+      <div class="panel-header">
+        <h1>Cadastrar contato</h1>
+        <p class="muted">Logado como: {sessionEmail}</p>
+      </div>
 
       {#if wizardStep === 'basic'}
-        <div data-testid="wizard-step-basic">
-          <h2>Etapa 1: Dados da loja</h2>
+        <div data-testid="contact-wizard-step-basic">
+          <h2>Etapa 1: Dados do contato</h2>
           <label>
-            Nome da loja
-            <input data-testid="store-name" bind:value={wizard.name} />
+            Nome do contato
+            <input data-testid="contact-name" bind:value={wizard.name} />
           </label>
           <label>
-            CNPJ
-            <input data-testid="store-document" bind:value={wizard.document} />
+            Documento
+            <input data-testid="contact-document" bind:value={wizard.document} />
           </label>
         </div>
       {:else if wizardStep === 'address'}
-        <div data-testid="wizard-step-address">
+        <div data-testid="contact-wizard-step-address">
           <h2>Etapa 2: Endereço</h2>
-          <label>CEP <input data-testid="store-cep" bind:value={wizard.address.cep} /></label>
-          <label>Rua <input data-testid="store-street" bind:value={wizard.address.street} /></label>
-          <label>Número <input data-testid="store-number" bind:value={wizard.address.number} /></label>
-          <label>Cidade <input data-testid="store-city" bind:value={wizard.address.city} /></label>
-          <label>Estado <input data-testid="store-state" bind:value={wizard.address.state} /></label>
+        <label>
+          CEP
+          <input
+            data-testid="contact-cep"
+            value={wizard.address.cep}
+            on:input={handleWizardCepInput}
+          />
+        </label>
+        <label>Rua <input data-testid="contact-street" bind:value={wizard.address.street} /></label>
+        <label>Número <input data-testid="contact-number" bind:value={wizard.address.number} /></label>
+        <label>Cidade <input data-testid="contact-city" bind:value={wizard.address.city} /></label>
+        <label>
+          Estado
+            <Select.Root type="single" bind:value={wizard.address.state} items={stateItems}>
+            <Select.Trigger data-testid="contact-state" class="select-trigger">
+              <Select.Value placeholder="Selecione o estado" />
+            </Select.Trigger>
+            <Select.Content class="select-content">
+              <Select.Viewport class="select-viewport">
+                {#each states as state}
+                  <Select.Item value={state} label={state} class="select-item">
+                    {state}
+                  </Select.Item>
+                {/each}
+              </Select.Viewport>
+            </Select.Content>
+          </Select.Root>
+        </label>
         </div>
       {:else if wizardStep === 'owner'}
-        <div data-testid="wizard-step-owner">
+        <div data-testid="contact-wizard-step-owner">
           <h2>Etapa 3: Responsável</h2>
           <label>
             Nome do responsável
-            <input data-testid="owner-name" bind:value={wizard.owner.name} />
+            <input data-testid="contact-owner-name" bind:value={wizard.owner.name} />
           </label>
           <label>
             Email do responsável
-            <input data-testid="owner-email" type="email" bind:value={wizard.owner.email} />
+            <input data-testid="contact-owner-email" type="email" bind:value={wizard.owner.email} />
           </label>
         </div>
       {:else}
-        <div data-testid="wizard-step-review">
+        <div data-testid="contact-wizard-step-review">
           <h2>Etapa 4: Revisão</h2>
-          <p data-testid="review-store-name"><strong>Nome:</strong> {wizard.name}</p>
-          <p data-testid="review-store-document"><strong>CNPJ:</strong> {wizard.document}</p>
-          <p data-testid="review-store-address">
+          <p data-testid="review-contact-name"><strong>Nome:</strong> {wizard.name}</p>
+          <p data-testid="review-contact-document"><strong>Documento:</strong> {wizard.document}</p>
+          <p data-testid="review-contact-address">
             <strong>Endereço:</strong> {wizard.address.street}, {wizard.address.number} - {wizard.address.city}/{wizard.address.state} - {wizard.address.cep}
           </p>
-          <p data-testid="review-store-owner">
+          <p data-testid="review-contact-owner">
             <strong>Responsável:</strong> {wizard.owner.name} ({wizard.owner.email})
           </p>
         </div>
       {/if}
 
-      <p class="error">{wizardError}</p>
+      <p class="error" data-testid="wizard-error">{wizardError}</p>
       <div class="actions">
         {#if wizardStep !== 'basic'}
-          <button data-testid="wizard-back" type="button" on:click={backStep}>Voltar</button>
+          <button data-testid="contact-wizard-back" type="button" on:click={backStep}>Voltar</button>
         {/if}
         {#if wizardStep !== 'review'}
-          <button data-testid="wizard-next" type="button" on:click={nextStep}>Próximo</button>
+          <button data-testid="contact-wizard-next" type="button" on:click={nextStep}>Próximo</button>
         {:else}
-          <button data-testid="wizard-finish" type="button" on:click={finishWizard}>Finalizar cadastro</button>
+          <button data-testid="contact-wizard-finish" type="button" on:click={finishWizard}>Finalizar cadastro</button>
         {/if}
       </div>
     </section>
   </main>
-{:else if route.name === 'store-detail'}
-  <main class="shell" data-testid="store-detail-page">
-    {#if currentStore}
+{:else if route.name === 'contact-detail'}
+  <main class="shell" data-testid="contact-detail-page">
+    {#if currentContact}
       <section class="panel narrow">
-        <h1>Loja cadastrada com sucesso</h1>
-        <p data-testid="store-detail-status">Status: {currentStore.status}</p>
-        <p data-testid="store-detail-name"><strong>Nome:</strong> {currentStore.name}</p>
-        <p data-testid="store-detail-document"><strong>CNPJ:</strong> {currentStore.document}</p>
-        <p data-testid="store-detail-address">
-          <strong>Endereço:</strong> {currentStore.address.street}, {currentStore.address.number} - {currentStore.address.city}/{currentStore.address.state} - {currentStore.address.cep}
+        <div class="panel-header">
+          <h1>Contato cadastrado com sucesso</h1>
+          <p class="muted">Logado como: {sessionEmail}</p>
+        </div>
+        <p data-testid="contact-detail-status">Status: {currentContact.status}</p>
+        <p data-testid="contact-detail-name"><strong>Nome:</strong> {currentContact.name}</p>
+        <p data-testid="contact-detail-document"><strong>Documento:</strong> {currentContact.document}</p>
+        <p data-testid="contact-detail-address">
+          <strong>Endereço:</strong> {currentContact.address.street}, {currentContact.address.number} - {currentContact.address.city}/{currentContact.address.state} - {currentContact.address.cep}
         </p>
-        <p data-testid="store-detail-owner">
-          <strong>Responsável:</strong> {currentStore.owner.name} ({currentStore.owner.email})
+        <p data-testid="contact-detail-owner">
+          <strong>Responsável:</strong> {currentContact.owner.name} ({currentContact.owner.email})
         </p>
         <div class="actions">
-          <button data-testid="edit-address" type="button" on:click={() => navigate(`/stores/${currentStore.id}/edit-address`)}>
+          <button data-testid="edit-address" type="button" on:click={() => navigate(`/contacts/${currentContact.id}/edit-address`)}>
             Editar endereço
           </button>
           <button data-testid="back-to-dashboard" type="button" on:click={() => navigate('/dashboard')}>
             Voltar ao dashboard
           </button>
+          <button data-testid="logout" type="button" on:click={logout}>Sair</button>
         </div>
       </section>
     {:else}
       <section class="panel narrow">
-        <h1>Loja não encontrada</h1>
+        <h1>Contato não encontrado</h1>
         <button type="button" on:click={() => navigate('/dashboard')}>Voltar ao dashboard</button>
       </section>
     {/if}
   </main>
-{:else if route.name === 'store-edit-address'}
-  <main class="shell" data-testid="edit-address-page">
-    {#if currentStore}
+{:else if route.name === 'contact-edit-address'}
+  <main class="shell" data-testid="contact-edit-address-page">
+    {#if currentContact}
       <section class="panel narrow">
-        <h1>Editar endereço</h1>
-        <label>CEP <input data-testid="edit-store-cep" bind:value={editAddress.cep} /></label>
-        <label>Rua <input data-testid="edit-store-street" bind:value={editAddress.street} /></label>
-        <label>Número <input data-testid="edit-store-number" bind:value={editAddress.number} /></label>
-        <label>Cidade <input data-testid="edit-store-city" bind:value={editAddress.city} /></label>
-        <label>Estado <input data-testid="edit-store-state" bind:value={editAddress.state} /></label>
+        <div class="panel-header">
+          <h1>Editar endereço</h1>
+          <p class="muted">Logado como: {sessionEmail}</p>
+        </div>
+        <label>
+          CEP
+          <input
+            data-testid="edit-contact-cep"
+            value={editAddress.cep}
+            on:input={handleEditCepInput}
+          />
+        </label>
+        <label>Rua <input data-testid="edit-contact-street" bind:value={editAddress.street} /></label>
+        <label>Número <input data-testid="edit-contact-number" bind:value={editAddress.number} /></label>
+        <label>Cidade <input data-testid="edit-contact-city" bind:value={editAddress.city} /></label>
+        <label>
+          Estado
+          <Select.Root type="single" bind:value={editAddress.state} items={stateItems}>
+            <Select.Trigger data-testid="edit-contact-state" class="select-trigger">
+              <Select.Value placeholder="Selecione o estado" />
+            </Select.Trigger>
+            <Select.Content class="select-content">
+              <Select.Viewport class="select-viewport">
+                {#each states as state}
+                  <Select.Item value={state} label={state} class="select-item">
+                    {state}
+                  </Select.Item>
+                {/each}
+              </Select.Viewport>
+            </Select.Content>
+          </Select.Root>
+        </label>
+        <p class="error" data-testid="edit-address-error">{editAddressError}</p>
         <div class="actions">
           <button data-testid="cancel-address" type="button" on:click={cancelAddress}>Cancelar</button>
           <button data-testid="save-address" type="button" on:click={saveAddress}>Salvar endereço</button>
+          <button data-testid="logout" type="button" on:click={logout}>Sair</button>
         </div>
       </section>
     {:else}
       <section class="panel narrow">
-        <h1>Loja não encontrada</h1>
+        <h1>Contato não encontrado</h1>
         <button type="button" on:click={() => navigate('/dashboard')}>Voltar ao dashboard</button>
       </section>
     {/if}
@@ -402,6 +569,13 @@
 
   .narrow {
     max-width: 560px;
+  }
+
+  .panel-header {
+    display: flex;
+    justify-content: space-between;
+    gap: 16px;
+    align-items: flex-start;
   }
 
   .page-header {
@@ -499,7 +673,8 @@
   }
 
   @media (max-width: 720px) {
-    .page-header {
+    .page-header,
+    .panel-header {
       flex-direction: column;
     }
   }

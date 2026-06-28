@@ -1,12 +1,12 @@
-import type { DemoStore, Session } from './types';
+import type { DemoContact, Session } from './types';
 
-const SESSION_KEY = 'qaplanner_demo_session';
-const STORES_KEY = 'qaplanner_demo_stores';
-const FLASH_KEY = 'qaplanner_demo_flash';
+const SESSION_KEY = 'dash_svelte_demo_session';
+const CONTACTS_KEY = 'dash_svelte_demo_contacts';
+const FLASH_KEY = 'dash_svelte_demo_flash';
 
 export const storageKeys = {
   session: SESSION_KEY,
-  stores: STORES_KEY,
+  contacts: CONTACTS_KEY,
   flash: FLASH_KEY,
 } as const;
 
@@ -28,30 +28,30 @@ export function clearSession(): void {
   localStorage.removeItem(SESSION_KEY);
 }
 
-export function readStores(): DemoStore[] {
-  const raw = localStorage.getItem(STORES_KEY);
+export function readContacts(): DemoContact[] {
+  const raw = localStorage.getItem(CONTACTS_KEY);
   if (!raw) return [];
   try {
-    const stores = JSON.parse(raw) as DemoStore[];
-    return Array.isArray(stores) ? stores : [];
+    const contacts = JSON.parse(raw) as DemoContact[];
+    return Array.isArray(contacts) ? contacts : [];
   } catch {
     return [];
   }
 }
 
-export function writeStores(stores: DemoStore[]): void {
-  localStorage.setItem(STORES_KEY, JSON.stringify(stores));
+export function writeContacts(contacts: DemoContact[]): void {
+  localStorage.setItem(CONTACTS_KEY, JSON.stringify(contacts));
 }
 
-export function upsertStore(store: DemoStore): void {
-  const stores = readStores();
-  const index = stores.findIndex((item) => item.id === store.id);
+export function upsertContact(contact: DemoContact): void {
+  const contacts = readContacts();
+  const index = contacts.findIndex((item) => item.id === contact.id);
   if (index >= 0) {
-    stores[index] = store;
+    contacts[index] = contact;
   } else {
-    stores.push(store);
+    contacts.push(contact);
   }
-  writeStores(stores);
+  writeContacts(contacts);
 }
 
 export function readFlash(): string {
@@ -70,14 +70,14 @@ export function consumeFlash(): string {
 
 export function clearDemoData(): void {
   localStorage.removeItem(SESSION_KEY);
-  localStorage.removeItem(STORES_KEY);
+  localStorage.removeItem(CONTACTS_KEY);
   localStorage.removeItem(FLASH_KEY);
 }
 
-export function nextStoreId(): string {
-  return `store-${readStores().length + 1}`;
+export function nextContactId(): string {
+  return `contact-${readContacts().length + 1}`;
 }
 
-export function getStoreById(id: string): DemoStore | undefined {
-  return readStores().find((store) => store.id === id);
+export function getContactById(id: string): DemoContact | undefined {
+  return readContacts().find((contact) => contact.id === id);
 }
