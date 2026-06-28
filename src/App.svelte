@@ -215,7 +215,7 @@
 {#if route.name === 'login'}
   <main class="shell" data-testid="login-page">
     <section class="panel narrow">
-      <h1>QAPlanner Demo App</h1>
+      <h1>dash-svelte</h1>
       <form on:submit={handleLoginSubmit}>
         <label>
           Email

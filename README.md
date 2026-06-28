@@ -1,6 +1,6 @@
-# QAPlanner Demo App
+# dash-svelte
 
-Deterministic Svelte app used as a target for QAPlanner smoke tests.
+Deterministic Svelte app used as a target for browser automation smoke tests.
 
 ## Run
 
@@ -30,7 +30,7 @@ This is not a real product. It is a local-only fixture for browser automation.
 
 Important UI elements expose `data-testid` attributes for automation.
 
-## Suggested QAPlanner env
+## Suggested automation env
 
 ```yaml
 base_url: http://localhost:5173/

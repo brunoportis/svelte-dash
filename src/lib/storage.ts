@@ -1,8 +1,8 @@
 import type { DemoStore, Session } from './types';
 
-const SESSION_KEY = 'qaplanner_demo_session';
-const STORES_KEY = 'qaplanner_demo_stores';
-const FLASH_KEY = 'qaplanner_demo_flash';
+const SESSION_KEY = 'dash_svelte_demo_session';
+const STORES_KEY = 'dash_svelte_demo_stores';
+const FLASH_KEY = 'dash_svelte_demo_flash';
 
 export const storageKeys = {
   session: SESSION_KEY,
