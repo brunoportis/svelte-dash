@@ -1345,6 +1345,7 @@
       0 0 30px rgba(100, 242, 223, 0.06);
     clip-path: polygon(0 0, calc(100% - 14px) 0, 100% 14px, 100% 100%, 14px 100%, 0 calc(100% - 14px));
     overflow: hidden;
+    transition: border-color 180ms ease, box-shadow 180ms ease, transform 180ms ease;
   }
 
   .record-frame::before {
@@ -1356,6 +1357,14 @@
       radial-gradient(circle at 18% 72%, rgba(217, 255, 87, 0.05), transparent 18%),
       linear-gradient(90deg, rgba(100, 242, 223, 0.07), transparent 24%, transparent 76%, rgba(100, 242, 223, 0.04));
     pointer-events: none;
+  }
+
+  .record-panel:hover .record-frame {
+    border-color: rgba(100, 242, 223, 0.24);
+    box-shadow:
+      inset 0 0 0 1px rgba(255, 255, 255, 0.04),
+      inset 0 1px 0 rgba(255, 255, 255, 0.05),
+      0 0 36px rgba(100, 242, 223, 0.1);
   }
 
   .record-banner {
@@ -1427,6 +1436,17 @@
     backdrop-filter: blur(10px);
     clip-path: polygon(0 0, calc(100% - 10px) 0, 100% 10px, 100% 100%, 10px 100%, 0 calc(100% - 10px));
     box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.02);
+    transition: transform 180ms ease, border-color 180ms ease, box-shadow 180ms ease, background 180ms ease;
+  }
+
+  .detail-cell:hover {
+    transform: translateY(-2px);
+    border-color: rgba(100, 242, 223, 0.26);
+    box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.03), 0 0 24px rgba(100, 242, 223, 0.08);
+    background:
+      linear-gradient(to bottom left, transparent 42%, rgba(100, 242, 223, 0.52) 46% 54%, transparent 58%) top right / 10px 10px no-repeat,
+      linear-gradient(to bottom left, transparent 42%, rgba(100, 242, 223, 0.52) 46% 54%, transparent 58%) bottom left / 10px 10px no-repeat,
+      linear-gradient(180deg, rgba(8, 28, 32, 0.66), rgba(4, 14, 17, 0.5));
   }
 
   .detail-cell p {
@@ -1462,6 +1482,15 @@
   .detail-cell-highlight strong {
     color: var(--success);
     text-transform: uppercase;
+  }
+
+  .detail-cell-highlight:hover {
+    border-color: rgba(156, 255, 186, 0.3);
+    box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.03), 0 0 26px rgba(156, 255, 186, 0.1);
+    background:
+      linear-gradient(to bottom left, transparent 42%, rgba(156, 255, 186, 0.52) 46% 54%, transparent 58%) top right / 10px 10px no-repeat,
+      linear-gradient(to bottom left, transparent 42%, rgba(100, 242, 223, 0.46) 46% 54%, transparent 58%) bottom left / 10px 10px no-repeat,
+      linear-gradient(135deg, rgba(14, 46, 36, 0.72), rgba(5, 18, 20, 0.52));
   }
 
   .detail-cell-wide {
