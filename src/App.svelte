@@ -2050,10 +2050,11 @@
   [data-testid='contact-wizard-step-owner'] label,
   [data-testid='contact-edit-address-page'] label {
     margin-top: 10px;
-    color: var(--text-2);
-    font-size: 0.78rem;
-    font-weight: 500;
-    letter-spacing: 0.12em;
+    color: var(--text-1);
+    font-size: 0.82rem;
+    font-weight: 600;
+    letter-spacing: 0.08em;
+    line-height: 1.2;
     text-transform: uppercase;
   }
 
