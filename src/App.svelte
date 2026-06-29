@@ -1088,13 +1088,17 @@
 
   .status-pill,
   .info-chip {
+    --chip-corner: rgba(100, 242, 223, 0.42);
     display: inline-flex;
     align-items: center;
     min-height: 34px;
     padding: 0 12px;
     color: var(--text-1);
     border: 1px solid rgba(111, 255, 237, 0.18);
-    background: rgba(8, 26, 30, 0.72);
+    background:
+      linear-gradient(to bottom left, transparent 42%, var(--chip-corner) 46% 54%, transparent 58%) top right / 10px 10px no-repeat,
+      linear-gradient(to bottom left, transparent 42%, var(--chip-corner) 46% 54%, transparent 58%) bottom left / 10px 10px no-repeat,
+      rgba(8, 26, 30, 0.72);
     letter-spacing: 0.12em;
     text-transform: uppercase;
     font-size: 0.82rem;
@@ -1156,11 +1160,19 @@
   }
 
   .panel-header {
+    position: relative;
     display: flex;
     justify-content: space-between;
     gap: 20px;
     align-items: flex-start;
     margin-bottom: 18px;
+    padding: 14px 16px 12px;
+    border: 1px solid rgba(100, 242, 223, 0.12);
+    background:
+      linear-gradient(to bottom left, transparent 42%, rgba(100, 242, 223, 0.3) 46% 54%, transparent 58%) top right / 12px 12px no-repeat,
+      linear-gradient(to bottom left, transparent 42%, rgba(100, 242, 223, 0.3) 46% 54%, transparent 58%) bottom left / 12px 12px no-repeat,
+      linear-gradient(180deg, rgba(8, 24, 28, 0.42), rgba(8, 24, 28, 0.18));
+    clip-path: polygon(0 0, calc(100% - 12px) 0, 100% 12px, 100% 100%, 12px 100%, 0 calc(100% - 12px));
   }
 
   .page-header {
@@ -2136,12 +2148,14 @@
   }
 
   .info-chip-elevated {
+    --chip-corner: rgba(217, 255, 87, 0.5);
     color: var(--lime);
     border-color: rgba(217, 255, 87, 0.34);
     box-shadow: inset 0 0 0 1px rgba(217, 255, 87, 0.05);
   }
 
   .info-chip-critical {
+    --chip-corner: rgba(255, 142, 121, 0.5);
     color: #ff8e79;
     border-color: rgba(255, 142, 121, 0.34);
     box-shadow: inset 0 0 0 1px rgba(255, 142, 121, 0.05);
