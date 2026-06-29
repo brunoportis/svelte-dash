@@ -556,8 +556,8 @@
         <span class="panel-index">AUTH // 001</span>
         <div class="panel-rule"></div>
         <p class="eyebrow">Secure Access</p>
-        <h1>Ponto de entrada do sistema</h1>
-        <p class="lede">Autentique a sessão para acessar o painel operacional.</p>
+        <h1>Acesso restrito</h1>
+        <p class="lede">Autentique a sessão para remover o bloqueio do painel operacional.</p>
         <div class="access-status"><i></i><span>Canal criptografado</span><b>AES-256</b></div>
         <form on:submit={handleLoginSubmit}>
           <label>
